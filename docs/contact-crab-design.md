@@ -1,7 +1,8 @@
 # Contact-force crab: design
 
-A rewrite of the crab (`crab/crab.gd`) as `crab/crab2.gd`. The goal is the same
-behaviour, and more, from a few physical rules instead of case-by-case fixes.
+A rewrite of the original crab (`crab/crab.gd`, since removed) as
+`crab/crab2.gd`. The goal is the same behaviour, and more, from a few physical
+rules instead of case-by-case fixes.
 
 ## Why
 
@@ -200,7 +201,7 @@ for one situation.
 
 ## Validation
 
-Headless scenario scripts, run against both crabs where it makes sense: a
+Headless scenario scripts (`tests/scenarios.gd`): a
 2 m drop, climbing the ramp onto the platform, walking off the platform edge,
 walking along and into the platform wall (count feet inside geometry), strafing
 into the wall (tilt over time, flip, recovery), and eye sway after stopping
