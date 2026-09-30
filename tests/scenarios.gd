@@ -17,20 +17,26 @@ var rig: Node3D
 func _initialize() -> void:
 	var world: Node = load("res://world/test_terrain.tscn").instantiate()
 	var scene_path := OS.get_environment("CRAB_SCENE")
+	# The scenarios are about one crab: keep the first and drop the rest.
+	var player: Node = world.get_node("Player")
+	var animals: Array = player.get_animals()
+	crab = animals[0]
+	for extra in animals.slice(1):
+		player.remove_child(extra)
+		extra.free()
 	if scene_path != "":
-		var old := world.get_node("Crab")
-		world.remove_child(old)
-		old.free()
-		var replacement: Node = load(scene_path).instantiate()
-		replacement.name = "Crab"
-		world.add_child(replacement)
+		var replacement: Node3D = load(scene_path).instantiate()
+		replacement.transform = crab.transform
+		player.remove_child(crab)
+		crab.free()
+		player.add_child(replacement)
+		crab = replacement
 	root.add_child(world)
-	crab = world.get_node("Crab")
-	rig = world.get_node("CameraRig")
+	rig = player.get_node("CameraRig")
 	await physics_frame
 
 	var only := OS.get_environment("SCENARIOS")
-	for scenario in ["stand", "walk", "facing", "drop", "ramp", "hump", "ledge", "walls", "climb", "eyes"]:
+	for scenario in ["stand", "walk", "facing", "drop", "ramp", "hump", "ledge", "walls", "climb"]:
 		if only == "" or scenario in only.split(","):
 			await call(scenario)
 	quit()
@@ -136,18 +142,6 @@ func climb() -> void:
 			_tilt(), _legs()], r, "released", r2)
 
 
-func eyes() -> void:
-	_place(Vector3(0, 0.107, 5))
-	await _hold("", 120)
-	await _hold("move_right", 120)
-	var r = await _hold("", 90)
-	_report("eyes after stop", "", r)
-	_place(Vector3(0, 1.0, 5))
-	await _hold("", 30)
-	r = await _hold("", 150)
-	_report("eyes after 1m drop", "", r)
-
-
 # --- Helpers ------------------------------------------------------------------
 
 func _place(p: Vector3) -> void:
@@ -160,7 +154,7 @@ func _place(p: Vector3) -> void:
 func _hold(action: String, frames: int) -> Dictionary:
 	if action != "":
 		Input.action_press(action)
-	var stats := {max_tilt = 0.0, flipped_at = -1.0, inside = 0, max_eye = 0.0, frames = frames,
+	var stats := {max_tilt = 0.0, flipped_at = -1.0, inside = 0, frames = frames,
 			min_speed = INF, min_spread = INF}
 	for f in frames:
 		await physics_frame
@@ -171,7 +165,6 @@ func _hold(action: String, frames: int) -> Dictionary:
 		for leg in crab._legs:
 			if _inside_platform(_foot(leg)):
 				stats.inside += 1
-		stats.max_eye = maxf(stats.max_eye, _eye_bend())
 		if f > 60:
 			stats.min_speed = minf(stats.min_speed, crab.linear_velocity.length())
 		stats.min_spread = minf(stats.min_spread, _spread())
@@ -184,16 +177,15 @@ func _merge(a: Dictionary, b: Dictionary) -> Dictionary:
 	var m := a.duplicate()
 	m.max_tilt = maxf(a.max_tilt, b.max_tilt)
 	m.inside = a.inside + b.inside
-	m.max_eye = maxf(a.max_eye, b.max_eye)
 	if m.flipped_at < 0.0 and b.flipped_at >= 0.0:
 		m.flipped_at = a.frames / 120.0 + b.flipped_at
 	return m
 
 
 func _report(label: String, detail: String, r: Dictionary, label2 := "", r2 := {}) -> void:
-	var line := "%-24s %s | max_tilt=%.0f%s feet_in_wall=%d eye_max=%.0f" % [
+	var line := "%-24s %s | max_tilt=%.0f%s feet_in_wall=%d" % [
 		label, detail, r.max_tilt,
-		(" FLIPPED@%.2fs" % r.flipped_at) if r.flipped_at >= 0.0 else "", r.inside, r.max_eye]
+		(" FLIPPED@%.2fs" % r.flipped_at) if r.flipped_at >= 0.0 else "", r.inside]
 	if label2 != "":
 		line += " | %s: max_tilt=%.0f%s" % [label2, r2.max_tilt,
 			(" FLIPPED@%.2fs" % r2.flipped_at) if r2.flipped_at >= 0.0 else ""]
@@ -240,16 +232,6 @@ func _legs() -> String:
 		else:
 			s += "L"
 	return s
-
-
-func _eye_bend() -> float:
-	var worst := 0.0
-	for eye in crab._eyes:
-		var tip = eye.get("tip")
-		var tip_pos: Vector3 = tip.pos if tip is Object else tip
-		var base: Vector3 = crab.to_global(eye.base_local)
-		worst = maxf(worst, rad_to_deg(crab.global_basis.y.angle_to(tip_pos - base)))
-	return worst
 
 
 func _inside_platform(p: Vector3) -> bool:

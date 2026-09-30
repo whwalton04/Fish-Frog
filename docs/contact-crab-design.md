@@ -75,7 +75,6 @@ level.
 |---|---|---|---|
 | Swinging foot | Foothold, lifted by up to `step_height` while far from it | Stiff, critically damped | Hip, 0.3 to 0.98 of leg reach |
 | Limp foot | Relaxed pose under the body, with gravity | Loose | Same |
-| Eye | Straight up from the stalk base | Springy, lightly damped | Base, fixed stalk length |
 
 A free foot plants when it reaches its foothold, or when it touches any
 surface within reach. This is how landing, and grabbing a wall mid-fall,
@@ -185,7 +184,6 @@ for one situation.
 - Gait: `step_threshold`, `settle_threshold`, `swing_stiffness`,
   `step_height`, `velocity_lead`, `foot_placement_jitter`
 - Limp: `limp_stiffness`, `limp_damping`
-- Eyes: `eye_stiffness`, `eye_damping`
 - Recovery: `self_right_torque`, `wall_roll_torque`
 - Shape and visuals (unchanged from `crab.gd`)
 
@@ -204,6 +202,5 @@ for one situation.
 Headless scenario scripts (`tests/scenarios.gd`): a
 2 m drop, climbing the ramp onto the platform, walking off the platform edge,
 walking along and into the platform wall (count feet inside geometry), strafing
-into the wall (tilt over time, flip, recovery), and eye sway after stopping
-and landing. Also: facing after walking each way (drift), and crossing the
+into the wall (tilt over time, flip, recovery). Also: facing after walking each way (drift), and crossing the
 hump and dome head-on and sideways (stalls, feet folded under the body).

@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://player/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://player/camera_rig.gd" id="2_cam"]
+
+[node name="Player" type="Node3D"]
+script = ExtResource("1_player")
+
+[node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("player")]
+script = ExtResource("2_cam")
+player = NodePath("..")
+
+[node name="Pitch" type="Node3D" parent="CameraRig"]
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraRig/Pitch"]
+spring_length = 1.2
+margin = 0.03
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/Pitch/SpringArm3D"]
+current = true
+fov = 65.0

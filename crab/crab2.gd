@@ -7,12 +7,12 @@ extends RigidBody3D
 ## the friction cone at the foot (push only, sideways force at most friction
 ## times push). Standing, walking, turning, bracing on walls, climbing them and
 ## losing drive in the air all come from that one law. Everything unplanted
-## (swinging feet, limp feet, eyes) is a point pulled toward a target on a
+## (swinging feet, limp feet) is a point pulled toward a target on a
 ## tether. The leg meshes are purely visual 3-segment IK.
 
 @export_group("Movement")
 @export var move_speed := 3.2
-## How fast the target facing turns toward the camera's (rad/s).
+## How fast the target facing turns toward facing_direction (rad/s).
 @export var turn_rate := 8.0
 ## How fast the target up axis tilts toward the surfaces underfoot (rad/s).
 @export var tilt_rate := 4.0
@@ -34,6 +34,9 @@ extends RigidBody3D
 @export var leg_max_force := 60.0
 ## Coulomb friction at the feet: sideways force per unit of push.
 @export var foot_friction := 0.8
+## What the feet can stand on and brace against. Leaves out other crabs, which
+## are bumped into but not walked on.
+@export_flags_3d_physics var foot_mask := 1
 ## How far the target up axis leans toward the surfaces underfoot (0..1).
 @export var terrain_follow := 1.0
 
@@ -55,10 +58,6 @@ extends RigidBody3D
 ## relaxed pose.
 @export var limp_stiffness := 30.0
 @export var limp_damping := 3.0
-
-@export_group("Eyes")
-@export var eye_stiffness := 700.0
-@export var eye_damping := 5.0
 
 @export_group("Recovery")
 ## Torque that rolls the crab back over once it has lain tipped over with no
@@ -105,7 +104,6 @@ const MAX_PITCH := 0.466
 const WALL_NORMAL_Y := 0.5
 ## The wall roll only grows while the body keeps up with it (radians behind).
 const WALL_ROLL_LAG := 0.35
-const EYE_RADIUS := 0.01
 const FOOT_RADIUS := 0.002
 
 ## A point mass on a tether, pulled toward a target by a spring.
@@ -134,16 +132,13 @@ class Leg:
 	var joints: Array[MeshInstance3D] = []
 	var marker: MeshInstance3D
 
-class Eye:
-	var stalk: MeshInstance3D
-	var base_local: Vector3
-	## Base to eye centre.
-	var length: float
-	var half_stalk: float
-	var tip := Point.new()
+## Which way to walk, in world space: horizontal, length 0..1 of full speed.
+## Set by whatever steers the crab (see Player).
+var move_direction := Vector3.ZERO
+## Which way to face, in world space. Zero keeps the current facing.
+var facing_direction := Vector3.ZERO
 
 var _legs: Array[Leg] = []
-var _eyes: Array[Eye] = []
 var _initialized := false
 var _wish := Vector3.ZERO
 ## The wished velocity turned onto the surface the body is aligned with.
@@ -210,11 +205,6 @@ func _ready() -> void:
 			leg.marker = _add_visual(marker_mesh)
 			_legs.append(leg)
 
-	for stalk_name in ["StalkL", "StalkR"]:
-		var stalk := get_node_or_null(stalk_name) as MeshInstance3D
-		if stalk:
-			_eyes.append(_make_eye(stalk))
-
 	_desired_facing = -global_basis.z
 	_target_basis = global_basis.orthonormalized()
 
@@ -232,19 +222,6 @@ func _make_leg(side: float, i: int) -> Leg:
 	leg.group = (i + (1 if side > 0.0 else 0)) % 2
 	leg.foot.pos = to_global(leg.rest_local)
 	return leg
-
-
-## Takes over a stalk from the scene (stalk mesh centred on its node, eye as
-## its first child) and simulates it from then on.
-func _make_eye(stalk: MeshInstance3D) -> Eye:
-	var eye := Eye.new()
-	eye.stalk = stalk
-	eye.half_stalk = (stalk.mesh as CylinderMesh).height * 0.5
-	eye.base_local = stalk.position - stalk.basis.y * eye.half_stalk
-	eye.length = eye.half_stalk + (stalk.get_child(0) as Node3D).position.y
-	eye.tip.pos = to_global(eye.base_local + Vector3.UP * eye.length)
-	stalk.top_level = true
-	return eye
 
 
 func _side_dir(side: float, degrees: float) -> Vector3:
@@ -276,28 +253,20 @@ func _physics_process(delta: float) -> void:
 
 	_apply_self_right(delta)
 	_apply_wall_roll()
-	for eye in _eyes:
-		_update_eye(eye, delta)
 
 
 func _process(_delta: float) -> void:
 	for leg in _legs:
 		_pose_leg(leg)
-	for eye in _eyes:
-		_pose_eye(eye)
 
 
 # --- Target pose --------------------------------------------------------------
 
 func _get_wish_velocity() -> Vector3:
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var cam := get_viewport().get_camera_3d()
-	var cam_basis := cam.global_basis if cam else global_basis
-	var forward := Vector3(-cam_basis.z.x, 0.0, -cam_basis.z.z).normalized()
-	var right := Vector3(cam_basis.x.x, 0.0, cam_basis.x.z).normalized()
-	if input.length_squared() > 0.01:
-		_desired_facing = forward
-	return (right * input.x - forward * input.y) * move_speed
+	var level := Vector3(facing_direction.x, 0.0, facing_direction.z)
+	if level.length_squared() > 1e-4:
+		_desired_facing = level.normalized()
+	return Vector3(move_direction.x, 0.0, move_direction.z).limit_length(1.0) * move_speed
 
 
 ## The pose the legs try to hold the body in: facing turns toward the desired
@@ -663,21 +632,11 @@ func _collide(p: Point, from: Vector3, radius: float) -> Dictionary:
 
 
 func _ray(from: Vector3, to: Vector3) -> Dictionary:
-	var query := PhysicsRayQueryParameters3D.create(from, to, collision_mask, [get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(from, to, foot_mask, [get_rid()])
 	return get_world_3d().direct_space_state.intersect_ray(query)
 
 
-# --- Eyes and recovery ------------------------------------------------------------
-
-func _update_eye(eye: Eye, delta: float) -> void:
-	var base := to_global(eye.base_local)
-	var base_vel := linear_velocity + angular_velocity.cross(base - global_position)
-	var from := eye.tip.pos
-	_spring_point(eye.tip, base + global_basis.y * eye.length, base_vel, eye_stiffness,
-			eye_damping, Vector3.ZERO, delta)
-	_tether(eye.tip, base, base_vel, eye.length, eye.length)
-	_collide(eye.tip, from, EYE_RADIUS)
-
+# --- Recovery ------------------------------------------------------------
 
 ## Once the crab has lain tipped over for a moment with its legs not holding
 ## it up (in its own frame), rolls it back onto its feet while the legs flail.
@@ -756,15 +715,6 @@ func _pose_leg(leg: Leg) -> void:
 	if show_foot_markers:
 		leg.marker.global_transform = Transform3D(Basis(), foot + Vector3.UP * 0.003)
 		leg.marker.material_override = _marker_planted_mat if leg.planted else _marker_free_mat
-
-
-func _pose_eye(eye: Eye) -> void:
-	var base := to_global(eye.base_local)
-	var y := eye.tip.pos - base
-	y = y.normalized() if y.length_squared() > 1e-8 else global_basis.y
-	var x := global_basis.x - y * global_basis.x.dot(y)
-	x = x.normalized() if x.length_squared() > 1e-6 else y.cross(Vector3.FORWARD).normalized()
-	eye.stalk.global_transform = Transform3D(Basis(x, y, x.cross(y)), base + y * eye.half_stalk)
 
 
 func _place_segment(mi: MeshInstance3D, from: Vector3, to: Vector3) -> void:

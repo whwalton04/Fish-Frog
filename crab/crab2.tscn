@@ -23,14 +23,6 @@ rings = 12
 albedo_color = Color(0.08, 0.06, 0.05, 1)
 roughness = 0.2
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_stalk"]
-material = SubResource("StandardMaterial3D_shell")
-top_radius = 0.006
-bottom_radius = 0.0073
-height = 0.033
-radial_segments = 8
-rings = 1
-
 [sub_resource type="SphereMesh" id="SphereMesh_eye"]
 material = SubResource("StandardMaterial3D_eye")
 radius = 0.01
@@ -39,6 +31,8 @@ radial_segments = 12
 rings = 6
 
 [node name="Crab" type="RigidBody3D"]
+collision_layer = 2
+collision_mask = 3
 mass = 5.0
 physics_material_override = SubResource("PhysicsMaterial_shell")
 can_sleep = false
@@ -52,18 +46,10 @@ shape = SubResource("ConvexPolygonShape3D_body")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.8, 0, 0, 0)
 mesh = SubResource("SphereMesh_shell")
 
-[node name="StalkL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.033, 0.04, -0.113)
-mesh = SubResource("CylinderMesh_stalk")
-
-[node name="EyeL" type="MeshInstance3D" parent="StalkL"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+[node name="EyeL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.033, 0.024, -0.113)
 mesh = SubResource("SphereMesh_eye")
 
-[node name="StalkR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.033, 0.04, -0.113)
-mesh = SubResource("CylinderMesh_stalk")
-
-[node name="EyeR" type="MeshInstance3D" parent="StalkR"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+[node name="EyeR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.033, 0.024, -0.113)
 mesh = SubResource("SphereMesh_eye")
