@@ -1,0 +1,70 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://crab/crab.gd" id="1_crab"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_shell"]
+friction = 0.3
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_body"]
+height = 0.073
+radius = 0.14
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shell"]
+albedo_color = Color(0.82, 0.32, 0.18, 1)
+roughness = 0.55
+
+[sub_resource type="SphereMesh" id="SphereMesh_shell"]
+material = SubResource("StandardMaterial3D_shell")
+radius = 0.167
+height = 0.087
+radial_segments = 32
+rings = 12
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eye"]
+albedo_color = Color(0.08, 0.06, 0.05, 1)
+roughness = 0.2
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_stalk"]
+material = SubResource("StandardMaterial3D_shell")
+top_radius = 0.006
+bottom_radius = 0.0073
+height = 0.033
+radial_segments = 8
+rings = 1
+
+[sub_resource type="SphereMesh" id="SphereMesh_eye"]
+material = SubResource("StandardMaterial3D_eye")
+radius = 0.01
+height = 0.02
+radial_segments = 12
+rings = 6
+
+[node name="Crab" type="RigidBody3D"]
+mass = 5.0
+physics_material_override = SubResource("PhysicsMaterial_shell")
+can_sleep = false
+angular_damp = 1.0
+script = ExtResource("1_crab")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CylinderShape3D_body")
+
+[node name="Carapace" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.8, 0, 0, 0)
+mesh = SubResource("SphereMesh_shell")
+
+[node name="StalkL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.033, 0.04, -0.113)
+mesh = SubResource("CylinderMesh_stalk")
+
+[node name="EyeL" type="MeshInstance3D" parent="StalkL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("SphereMesh_eye")
+
+[node name="StalkR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.033, 0.04, -0.113)
+mesh = SubResource("CylinderMesh_stalk")
+
+[node name="EyeR" type="MeshInstance3D" parent="StalkR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("SphereMesh_eye")

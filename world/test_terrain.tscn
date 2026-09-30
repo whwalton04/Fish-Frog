@@ -1,0 +1,148 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://world/checker.gdshader" id="1_checker"]
+[ext_resource type="PackedScene" path="res://crab/crab.tscn" id="2_crab"]
+[ext_resource type="Script" path="res://world/camera_rig.gd" id="3_cam"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+
+[sub_resource type="Sky" id="Sky_sky"]
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="Environment" id="Environment_env"]
+background_mode = 2
+sky = SubResource("Sky_sky")
+ambient_light_source = 3
+tonemap_mode = 2
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
+render_priority = 0
+shader = ExtResource("1_checker")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ramp"]
+render_priority = 0
+shader = ExtResource("1_checker")
+shader_parameter/color_a = Color(0.62, 0.66, 0.72, 1)
+shader_parameter/color_b = Color(0.54, 0.58, 0.64, 1)
+shader_parameter/cell_size = 0.5
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hump"]
+render_priority = 0
+shader = ExtResource("1_checker")
+shader_parameter/color_a = Color(0.52, 0.66, 0.44, 1)
+shader_parameter/color_b = Color(0.45, 0.58, 0.38, 1)
+shader_parameter/cell_size = 0.5
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
+size = Vector3(60, 1, 60)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ground"]
+material = SubResource("ShaderMaterial_ground")
+size = Vector3(60, 1, 60)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ramp"]
+size = Vector3(4, 0.4, 8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ramp"]
+material = SubResource("ShaderMaterial_ramp")
+size = Vector3(4, 0.4, 8)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_platform"]
+size = Vector3(4, 2.07, 4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_platform"]
+material = SubResource("ShaderMaterial_ramp")
+size = Vector3(4, 2.07, 4)
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_hump"]
+height = 10.0
+radius = 5.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hump"]
+material = SubResource("ShaderMaterial_hump")
+top_radius = 5.0
+bottom_radius = 5.0
+height = 10.0
+radial_segments = 96
+rings = 1
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_dome"]
+radius = 3.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_dome"]
+material = SubResource("ShaderMaterial_hump")
+radius = 3.0
+height = 6.0
+radial_segments = 64
+rings = 32
+
+[node name="TestTerrain" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 10, 0)
+shadow_enabled = true
+
+[node name="Ground" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("BoxShape3D_ground")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("BoxMesh_ground")
+
+[node name="Ramp" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.965926, -0.258819, 0, 0.258819, 0.965926, 0, 0.842, -8)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ramp"]
+shape = SubResource("BoxShape3D_ramp")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ramp"]
+mesh = SubResource("BoxMesh_ramp")
+
+[node name="Platform" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.035, -13.8)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platform"]
+shape = SubResource("BoxShape3D_platform")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platform"]
+mesh = SubResource("BoxMesh_platform")
+
+[node name="Hump" type="StaticBody3D" parent="."]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 8, -4, -6)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hump"]
+shape = SubResource("CylinderShape3D_hump")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Hump"]
+mesh = SubResource("CylinderMesh_hump")
+
+[node name="Dome" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, -2.2, -5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Dome"]
+shape = SubResource("SphereShape3D_dome")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Dome"]
+mesh = SubResource("SphereMesh_dome")
+
+[node name="Crab" parent="." instance=ExtResource("2_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.107, 0)
+
+[node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target")]
+script = ExtResource("3_cam")
+target = NodePath("../Crab")
+
+[node name="Pitch" type="Node3D" parent="CameraRig"]
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraRig/Pitch"]
+spring_length = 1.2
+margin = 0.03
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/Pitch/SpringArm3D"]
+current = true
+fov = 65.0
