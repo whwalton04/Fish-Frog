@@ -2,111 +2,85 @@ class_name ContactCrab
 extends RigidBody3D
 ## Contact-force crab. See docs/contact-crab-design.md.
 ##
-## The body only moves through its legs. Each planted foot pulls its hip toward
-## where the body's target pose says it should be, and that force is limited by
-## the friction cone at the foot (push only, sideways force at most friction
-## times push). Standing, walking, turning, bracing on walls, climbing them and
-## losing drive in the air all come from that one law. Everything unplanted
-## (swinging feet, limp feet) is a point pulled toward a target on a
-## tether. The leg meshes are purely visual 3-segment IK.
+## The body only moves through its legs: each planted foot pulls its hip toward
+## the target pose, limited by the friction cone at the foot. Unplanted feet
+## are points on tethers. The leg meshes are purely visual IK.
 
 @export_group("Movement")
 @export var move_speed := 3.2
-## How fast the target facing turns toward facing_direction (rad/s).
+## rad/s
 @export var turn_rate := 8.0
-## How fast the target up axis tilts toward the surfaces underfoot (rad/s).
+## rad/s
 @export var tilt_rate := 4.0
-## How fast pushing into a wall rolls the crab up it (rad/s): the wall-side
-## legs climb, the body leans away from the wall and, if the push keeps up,
-## it goes over onto its back.
+## How fast pushing into a wall rolls the crab up it (rad/s).
 @export var wall_roll_rate := 0.5
 
 @export_group("Legs")
-## Desired height of the body centre above the feet.
 @export var ride_height := 0.107
-## Spring pulling each hip toward its goal along the body's up axis (N/m),
-## and sideways, which anchors the body over its feet.
+## Hip spring along the body's up axis and sideways (N/m).
 @export var leg_stiffness := 330.0
 @export var leg_lateral_stiffness := 90.0
-## Pulls each hip's velocity toward the wished walking velocity (N·s/m). This
-## is what drives the body, through friction.
+## Pulls hip velocity toward the wished velocity (N·s/m); drives the body.
 @export var leg_damping := 30.0
 @export var leg_max_force := 60.0
-## Coulomb friction at the feet: sideways force per unit of push.
 @export var foot_friction := 0.8
-## What the feet can stand on and brace against. Leaves out other crabs, which
-## are bumped into but not walked on.
+## Leaves out other crabs, which are bumped into but not walked on.
 @export_flags_3d_physics var foot_mask := 1
-## How far the target up axis leans toward the surfaces underfoot (0..1).
+## 0..1
 @export var terrain_follow := 1.0
 
 @export_group("Gait")
-## How far a planted foot may drift from its foothold before stepping.
 @export var step_threshold := 0.14
-## Smaller threshold used when standing still so the stance tidies itself up.
+## Used when standing still so the stance tidies itself up.
 @export var settle_threshold := 0.027
-## Spring pulling a swinging foot to its foothold (1/s²).
+## 1/s²
 @export var swing_stiffness := 80000.0
 @export var step_height := 0.05
 ## Seconds of velocity to place feet ahead of the body.
 @export var velocity_lead := 0.1
-## Random scatter of where each foot lands (m).
 @export var foot_placement_jitter := 0.027
 
 @export_group("Limp")
-## Spring (1/s²) and damping (1/s) pulling a foot with no foothold toward a
-## relaxed pose.
-@export var limp_stiffness := 30.0
-@export var limp_damping := 3.0
+## Spring (1/s²) and damping (1/s) holding a foot with no foothold on the body.
+@export var limp_stiffness := 400.0
+@export var limp_damping := 8.0
 
 @export_group("Recovery")
-## Torque that rolls the crab back over once it has lain tipped over with no
-## feet down for half a second. 0 disables.
+## 0 disables.
 @export var self_right_torque := 12.0
-## Torque per radian holding the body to the lean while it rolls up a wall
-## (the legs alone let it wobble and drop). 0 leaves it to the legs.
+## Torque per radian holding the lean while rolling up a wall. 0 disables.
 @export var wall_roll_torque := 6.0
 
 @export_group("Shape")
-## Half width (x) and half length (z) of the carapace, used to place hips.
+## Half width (x) and half length (z) of the carapace.
 @export var body_half_extents := Vector2(0.167, 0.133)
 @export var hip_height := -0.01
 ## Merus, carpus+propodus, dactyl lengths (before per-leg scale).
 @export var segment_lengths := Vector3(0.14, 0.133, 0.08)
-## How far the dactyl (last segment) leans inward from the surface normal.
 @export var dactyl_tilt_deg := 20.0
 @export var leg_color := Color(0.88, 0.42, 0.24)
-@export var show_foot_markers := true
 
-# Per-leg layout, front to back. Angles are degrees around the body measured
-# from the side axis; negative points toward the front (-Z).
+# Per-leg layout, front to back. Degrees from the side axis; negative is forward.
 const HIP_ANGLES := [-40.0, -14.0, 12.0, 36.0]
 const FOOT_ANGLES := [-60.0, -22.0, 16.0, 48.0]
 const FOOT_REACH := [0.22, 0.247, 0.24, 0.207]
 const LEG_SCALE := [0.9, 1.0, 1.0, 0.86]
 const SEGMENT_RADII := [Vector2(0.015, 0.012), Vector2(0.012, 0.0087), Vector2(0.0087, 0.002)]
-## A foot stays between these fractions of full leg reach from its hip.
+# Reach limits as fractions of full leg length.
 const MIN_REACH := 0.3
-## How far out to its own side of the hip a foot must stay, as a fraction of
-## full leg reach.
 const MIN_SPREAD := 0.1
-## sin() of the most a foot may sit above its hip's plane (30°).
-const MAX_RAISE := 0.5
+const MAX_RAISE := 0.5  # sin(30°)
 const MAX_REACH := 0.98
-## Footholds must be a little closer than MAX_REACH, so a fresh foot isn't
-## released straight away.
+# Below MAX_REACH so a fresh foot isn't released straight away.
 const HOLD_REACH := 0.95
 const SELF_RIGHT_DELAY := 0.5
-## tan() of the most the body pitches to follow surfaces (25°).
-const MAX_PITCH := 0.466
-## Surfaces whose normal is closer to horizontal than this (world up y below
-## cos 60°) are walls: braced on and rolled up, never followed as ground.
+const AIRBORNE_DELAY := 0.05
+const MAX_PITCH := 0.466  # tan(25°)
+# Surfaces with normal.y below this (cos 60°) are walls.
 const WALL_NORMAL_Y := 0.5
-## The wall roll only grows while the body keeps up with it (radians behind).
 const WALL_ROLL_LAG := 0.35
 const FOOT_RADIUS := 0.002
 
-## A point mass on a tether, pulled toward a target by a spring.
 class Point:
 	var pos: Vector3
 	var vel := Vector3.ZERO
@@ -116,60 +90,46 @@ class Leg:
 	var rest_local: Vector3
 	var out_local: Vector3
 	var length_scale: float
-	## Tetrapod gait: legs in the same group step together.
-	var group: int
+	var group: int  # legs in the same group step together
 	var foot := Point.new()
 	var planted := false
-	## Surface the foot is planted on.
 	var normal := Vector3.UP
 	var collider: Object
-	## Foothold the foot is heading for (or would step to, while planted).
 	var has_hold := false
 	var hold: Vector3
 	var hold_normal := Vector3.UP
 	var hold_collider: Object
 	var segments: Array[MeshInstance3D] = []
 	var joints: Array[MeshInstance3D] = []
-	var marker: MeshInstance3D
 
-## Which way to walk, in world space: horizontal, length 0..1 of full speed.
-## Set by whatever steers the crab (see Player).
+## World space, horizontal, length 0..1 of full speed. Set by Player.
 var move_direction := Vector3.ZERO
-## Which way to face, in world space. Zero keeps the current facing.
+## World space. Zero keeps the current facing.
 var facing_direction := Vector3.ZERO
 
 var _legs: Array[Leg] = []
 var _initialized := false
 var _wish := Vector3.ZERO
-## The wished velocity turned onto the surface the body is aligned with.
 var _drive := Vector3.ZERO
 var _desired_facing := Vector3.FORWARD
 var _target_basis := Basis()
-## Where the planted feet say the body centre should be in the target pose.
 var _fit_center := Vector3.ZERO
-## How far pushing into a wall has rolled the target pose, and that wall's
-## horizontal normal.
 var _wall_roll := 0.0
 var _wall_normal := Vector3.ZERO
-## Sum of the normals of walls the foothold search ran into last tick.
 var _walls_seen := Vector3.ZERO
 var _stuck_time := 0.0
-## Total leg force along the body's own up axis this tick.
 var _support := 0.0
+var _pushing := false
+var _air_time := 0.0
+var _airborne := false
 var _righting := false
 var _time := 0.0
-var _marker_planted_mat: StandardMaterial3D
-var _marker_free_mat: StandardMaterial3D
 
 
 func _ready() -> void:
 	var leg_mat := StandardMaterial3D.new()
 	leg_mat.albedo_color = leg_color
 	leg_mat.roughness = 0.6
-	_marker_planted_mat = StandardMaterial3D.new()
-	_marker_planted_mat.albedo_color = Color(0.15, 0.55, 0.95)
-	_marker_free_mat = StandardMaterial3D.new()
-	_marker_free_mat.albedo_color = Color(0.95, 0.85, 0.2)
 
 	var segment_meshes: Array[CylinderMesh] = []
 	for radii in SEGMENT_RADII:
@@ -190,11 +150,6 @@ func _ready() -> void:
 		mesh.rings = 5
 		mesh.material = leg_mat
 		joint_meshes.append(mesh)
-	var marker_mesh := CylinderMesh.new()
-	marker_mesh.top_radius = 0.013
-	marker_mesh.bottom_radius = 0.013
-	marker_mesh.height = 0.007
-	marker_mesh.radial_segments = 12
 
 	for side in [-1.0, 1.0]:
 		for i in 4:
@@ -202,7 +157,6 @@ func _ready() -> void:
 			for s in 3:
 				leg.segments.append(_add_visual(segment_meshes[s]))
 				leg.joints.append(_add_visual(joint_meshes[s]))
-			leg.marker = _add_visual(marker_mesh)
 			_legs.append(leg)
 
 	_desired_facing = -global_basis.z
@@ -244,12 +198,15 @@ func _physics_process(delta: float) -> void:
 	_update_gait()
 
 	_support = 0.0
+	_pushing = false
 	_fit_center = _fit_body_center()
 	for leg in _legs:
 		if leg.planted:
 			_push_with_leg(leg)
 		else:
 			_move_free_foot(leg, delta)
+	_air_time = 0.0 if _pushing else _air_time + delta
+	_airborne = _air_time > AIRBORNE_DELAY
 
 	_apply_self_right(delta)
 	_apply_wall_roll()
@@ -269,9 +226,7 @@ func _get_wish_velocity() -> Vector3:
 	return Vector3(move_direction.x, 0.0, move_direction.z).limit_length(1.0) * move_speed
 
 
-## The pose the legs try to hold the body in: facing turns toward the desired
-## facing, and up leans toward the ground underfoot and rolls away from a wall
-## being pushed into, all at limited rates.
+## The pose the legs try to hold the body in, updated at limited rates.
 func _update_target_basis(delta: float) -> void:
 	var ground_sum := Vector3.ZERO
 	var wall_sum := Vector3.ZERO
@@ -289,18 +244,15 @@ func _update_target_basis(delta: float) -> void:
 	var up := Vector3.UP
 	if ground_sum.length_squared() > 1e-6:
 		up = up.lerp(ground_sum.normalized(), terrain_follow).normalized()
-		# A crab's body rolls freely (it walks sideways) but pitches little,
-		# so only follow the surfaces so far nose-up or nose-down.
+		# Crabs roll freely but pitch little.
 		var pitch := up.dot(forward)
 		var rest := up - forward * pitch
 		up = (rest + forward * clampf(pitch, -rest.length() * MAX_PITCH, rest.length() * MAX_PITCH)).normalized()
-	# Walk along the ground the body is turned to, as on a slope.
 	_drive = Quaternion(Vector3.UP, up) * _wish
 
 	_update_wall_roll(wall_sum + _walls_seen, delta)
 	_walls_seen = Vector3.ZERO
 	if _wall_roll > 0.0:
-		# Wall side up: the body leans away from the wall, belly toward it.
 		up = up.rotated(Vector3.UP.cross(_wall_normal).normalized(), _wall_roll)
 
 	var tilt := _target_basis.y.angle_to(up)
@@ -311,9 +263,6 @@ func _update_target_basis(delta: float) -> void:
 		_target_basis = Basis.looking_at(level_forward, up)
 
 
-## Pushing into a wall the legs are on or reaching for rolls the target pose
-## up it, as long as the body keeps up. Letting go lets it back down. Once the
-## body has gone over, the roll is dropped and self-righting takes over.
 func _update_wall_roll(wall_sum: Vector3, delta: float) -> void:
 	var pushing := _pushing_into(wall_sum)
 	if pushing:
@@ -321,14 +270,13 @@ func _update_wall_roll(wall_sum: Vector3, delta: float) -> void:
 	if global_basis.y.y < -0.3:
 		_wall_roll = 0.0
 	elif pushing:
-		# Only waits while the body lags behind, not when it runs ahead.
+		# Only grows while the body keeps up.
 		if _target_basis.y.angle_to(Vector3.UP) - global_basis.y.angle_to(Vector3.UP) < WALL_ROLL_LAG:
 			_wall_roll += wall_roll_rate * delta
 	else:
 		_wall_roll = maxf(_wall_roll - wall_roll_rate * 2.0 * delta, 0.0)
 
 
-## Whether the wished walk heads into a wall with this normal.
 func _pushing_into(wall_normal: Vector3) -> bool:
 	var level := Vector3(wall_normal.x, 0.0, wall_normal.z)
 	if level.length_squared() < 1e-4 or _wish.length_squared() < 0.01:
@@ -338,27 +286,19 @@ func _pushing_into(wall_normal: Vector3) -> bool:
 
 # --- Legs ---------------------------------------------------------------------
 
-## The one leg law: spring the hip toward where it sits in the target pose,
-## carry a share of the weight, drive toward the wished velocity, then limit
-## the force to what the contact can take. The weight share is a fixed eighth:
-## a foot can't know where the weight is, and a few feet at one edge (say, on
-## a ledge) carrying all of it would lever the body over.
-##
-## The hip's goal is the target pose placed over the planted feet together
-## (see _fit_body_center), not over this foot alone: turning each leg about
-## its own foot would, with the feet outside the hips, turn and roll the body
-## the wrong way.
+## Springs the hip toward the target pose over the planted feet, carries an
+## eighth of the weight and drives toward the wished velocity, limited by the
+## friction cone.
 func _push_with_leg(leg: Leg) -> void:
 	if not _in_reach(leg, leg.foot.pos, MAX_REACH):
-		leg.planted = false  # body moved away, or rolled over it: let go
+		leg.planted = false
 		return
 	var hip := to_global(leg.hip_local)
 	var offset := hip - global_position
 	var hip_vel := linear_velocity + angular_velocity.cross(offset)
 	var up := _target_basis.y
 
-	# A foot can't pull the body toward the surface it stands on, so it drives
-	# only along that surface.
+	# A foot can't pull the body toward its surface.
 	var drive := _drive
 	var into := drive.dot(leg.normal)
 	if into < 0.0:
@@ -370,9 +310,13 @@ func _push_with_leg(leg: Leg) -> void:
 			+ (drive - hip_vel) * leg_damping \
 			- get_gravity() * mass / _legs.size()
 	force = _friction_cone(force, leg.normal).limit_length(leg_max_force)
+	if force == Vector3.ZERO:
+		if _airborne and hip.distance_to(leg.foot.pos) > (leg.rest_local - leg.hip_local).length():
+			leg.planted = false
+		return
+	_pushing = true
 
-	# Applied level with the centre of mass: the hips sit a hair below it,
-	# and driving through them there pitches the body nose-up.
+	# Level with the centre of mass, so driving doesn't pitch the body.
 	apply_force(force, offset - global_basis.y * offset.dot(global_basis.y))
 	_support += force.dot(global_basis.y)
 	var body := leg.collider as RigidBody3D
@@ -380,11 +324,8 @@ func _push_with_leg(leg: Leg) -> void:
 		body.apply_force(-force, leg.foot.pos - body.global_position)
 
 
-## Where the body centre would be if the target pose stood on the planted
-## feet: each foot's rest spot, in the target pose, puts the centre somewhere,
-## and this is the average. Feet on the ground are what the body stands and
-## pivots on; feet on a wall only brace, so they count only when no foot is on
-## the ground.
+## Average body centre implied by each planted foot's rest spot. Wall feet
+## count only when no foot is on the ground.
 func _fit_body_center() -> Vector3:
 	var ground := Vector3.ZERO
 	var ground_count := 0
@@ -405,8 +346,7 @@ func _fit_body_center() -> Vector3:
 	return wall / wall_count if wall_count > 0 else global_position
 
 
-## Clips a force to what a contact with this normal can transmit: it can push
-## but never pull, and sideways force is at most friction times the push.
+## Push only, never pull; sideways force at most friction times push.
 func _friction_cone(force: Vector3, normal: Vector3) -> Vector3:
 	var push := force.dot(normal)
 	if push <= 0.0:
@@ -415,13 +355,9 @@ func _friction_cone(force: Vector3, normal: Vector3) -> Vector3:
 	return normal * push + slide.limit_length(foot_friction * push)
 
 
-## Decides which feet step. A planted foot lifts when it has drifted too far
-## from where it would step to, unless the other gait group is in the air.
-## (A foot the body has moved out of reach of lets go by itself.)
 func _update_gait() -> void:
 	var flat_vel := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
-	# Capped at half the threshold so feet spend as long ahead of the hip as
-	# behind it, keeping the lateral springs from dragging on average.
+	# Capped so feet spend as long ahead of the hip as behind it.
 	var lead := (flat_vel * velocity_lead).limit_length(step_threshold * 0.5)
 	var moving := flat_vel.length() > 0.1 or absf(angular_velocity.y) > 0.4
 	var threshold := step_threshold if moving else settle_threshold
@@ -431,9 +367,7 @@ func _update_gait() -> void:
 			swinging[leg.group] = true
 
 	for leg in _legs:
-		# A swinging foot keeps the foothold it picked at lift-off (chasing one
-		# that moves with the body, it would never land) unless it goes out of
-		# reach.
+		# A swinging foot keeps its foothold, or it would chase it forever.
 		if leg.planted or not leg.has_hold or not _in_reach(leg, leg.hold, HOLD_REACH):
 			leg.has_hold = _find_hold(leg, lead)
 		if not _initialized:
@@ -451,15 +385,8 @@ func _update_gait() -> void:
 	_initialized = true
 
 
-## Finds where a foot should go, in the body's own frame so it works the same
-## on floors, walls, or rolled over (and agrees with the reach check): reach
-## out from inside the body at hip height toward above the foot's home spot,
-## then down.
-##
-## If that reach runs into rising ground (a hump), the foot carries on along
-## it toward home, so it stays splayed out rather than folding in against the
-## body. A wall is braced on the same way while walking into it, which is what
-## rolls the crab up it; otherwise the foot stands at the wall's base.
+## Raycasts in the body's frame from hip height out above the foot's home spot,
+## then down. Rising ground, or a wall being walked into, is reached along.
 func _find_hold(leg: Leg, lead: Vector3) -> bool:
 	var pose := global_basis.orthonormalized()
 	var up := pose.y
@@ -487,8 +414,6 @@ func _find_hold(leg: Leg, lead: Vector3) -> bool:
 	return true
 
 
-## From where a reach hit a surface, carries on along it toward `goal` and
-## looks back onto it there. Empty if something is in the way.
 func _reach_along(surface: Dictionary, goal: Vector3) -> Dictionary:
 	var n: Vector3 = surface.normal
 	var start: Vector3 = surface.position + n * 0.01
@@ -501,9 +426,6 @@ func _reach_along(surface: Dictionary, goal: Vector3) -> Dictionary:
 	return _ray(over, over - n * step_height * 3.0)
 
 
-## Randomly scatters a new foothold across its surface, so uneven footing
-## nudges the body around. Keeps the original if the scatter would cross an
-## edge or wall.
 func _scatter_hold(leg: Leg) -> void:
 	var n := leg.hold_normal
 	var tangent := n.cross(Vector3.RIGHT if absf(n.x) < 0.9 else Vector3.FORWARD).normalized()
@@ -518,30 +440,21 @@ func _scatter_hold(leg: Leg) -> void:
 		leg.hold_collider = hit.collider
 
 
-## Swings a foot toward its foothold, or lets it hang limp if it has none.
-## Plants on reaching the foothold or on touching any surface within reach.
 func _move_free_foot(leg: Leg, delta: float) -> void:
 	var hip := to_global(leg.hip_local)
 	var hip_vel := linear_velocity + angular_velocity.cross(hip - global_position)
 	if hip.distance_to(leg.foot.pos) > _leg_reach(leg) * 2.0:
-		# Left far behind (teleport, tunnelling): bring it back rather than
-		# drag it through whatever is in between.
 		leg.foot.pos = hip
 		leg.foot.vel = hip_vel
 	var from := leg.foot.pos
 	var target: Vector3
-	if leg.has_hold:
-		# Lift by how far the foot still has to travel across the surface, so
-		# it arcs over and comes straight down onto the foothold. Aimed a
-		# little into the surface so it strikes and plants rather than
-		# creeping the last millimetres.
+	var stepping := leg.has_hold and not _airborne
+	if stepping:
+		# Arc over, then strike slightly into the surface.
 		var to_foot := leg.foot.pos - leg.hold
 		var across := (to_foot - leg.hold_normal * to_foot.dot(leg.hold_normal)).length()
 		var lift_dir := (global_basis.y + leg.hold_normal).normalized()
 		target = leg.hold + lift_dir * minf(across, step_height) - leg.hold_normal * step_height * 0.5
-		# The foothold is fixed in the world, so damp toward rest, not toward
-		# the body's velocity (that would drag the foot along and it would
-		# hover short of landing).
 		_spring_point(leg.foot, target, Vector3.ZERO, swing_stiffness, 2.0 * sqrt(swing_stiffness),
 				Vector3.ZERO, delta)
 	else:
@@ -549,14 +462,14 @@ func _move_free_foot(leg: Leg, delta: float) -> void:
 		if _righting:
 			pose += Vector3.UP * sin(_time * 22.0 + leg.hip_local.z * 60.0) * ride_height
 		target = to_global(pose)
-		# Part joint damping (follows the body), part air drag.
-		_spring_point(leg.foot, target, hip_vel * 0.7, limp_stiffness, limp_damping,
+		var target_vel := linear_velocity + angular_velocity.cross(target - global_position)
+		_spring_point(leg.foot, target, target_vel, limp_stiffness, limp_damping,
 				get_gravity(), delta)
 
 	var reach := _leg_reach(leg)
 	_tether(leg.foot, hip, hip_vel, reach * MIN_REACH, reach * MAX_REACH)
 	var hit := _collide(leg.foot, from, FOOT_RADIUS)
-	if leg.has_hold and leg.foot.pos.distance_to(leg.hold) < 0.01:
+	if stepping and leg.foot.pos.distance_to(leg.hold) < 0.01:
 		_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider)
 	elif not hit.is_empty() and _in_reach(leg, hit.position, HOLD_REACH):
 		_plant(leg, hit.position, hit.normal, hit.collider)
@@ -564,21 +477,14 @@ func _move_free_foot(leg: Leg, delta: float) -> void:
 
 func _plant(leg: Leg, at: Vector3, normal: Vector3, collider: Object) -> void:
 	leg.planted = true
-	# Rest a hair off the surface: a ray starting exactly on it wouldn't see
-	# it, and the foot would slip through when it next lifts.
+	# Off the surface, so later rays from here still see it.
 	leg.foot.pos = at + normal * FOOT_RADIUS
 	leg.foot.vel = Vector3.ZERO
 	leg.normal = normal
 	leg.collider = collider
 
 
-## A leg's workspace: between folded and (a fraction of) fully stretched, out
-## to its own side of the hip, and not far above the hip, since a leg can only
-## push from the body's underside. Splayed a little above is allowed, so a
-## crab lying on its belly can still push up, and the far legs keep hold while
-## it leans away from a wall. A foot the body has run over
-## (under the body, on the far side of its hip) is out, so it steps instead of
-## being dragged along folded.
+## Between folded and stretched, on the leg's own side, not far above the hip.
 func _in_reach(leg: Leg, point: Vector3, max_fraction: float) -> bool:
 	var to_point := point - to_global(leg.hip_local)
 	var dist := to_point.length()
@@ -594,8 +500,7 @@ func _leg_reach(leg: Leg) -> float:
 
 # --- Points on tethers ----------------------------------------------------------
 
-## Implicit-Euler spring-damper step toward a moving target: stable at any
-## stiffness.
+## Implicit-Euler spring-damper step: stable at any stiffness.
 func _spring_point(p: Point, target: Vector3, target_vel: Vector3, stiffness: float,
 		damping: float, accel: Vector3, dt: float) -> void:
 	p.vel = (p.vel + dt * (stiffness * (target - p.pos) + damping * target_vel + accel)) \
@@ -603,8 +508,6 @@ func _spring_point(p: Point, target: Vector3, target_vel: Vector3, stiffness: fl
 	p.pos += p.vel * dt
 
 
-## Keeps a point between min_len and max_len from its anchor, cancelling any
-## velocity that would carry it further out of range.
 func _tether(p: Point, anchor: Vector3, anchor_vel: Vector3, min_len: float, max_len: float) -> void:
 	var offset := p.pos - anchor
 	var dist := offset.length()
@@ -620,8 +523,6 @@ func _tether(p: Point, anchor: Vector3, anchor_vel: Vector3, min_len: float, max
 		p.vel -= dir * rel
 
 
-## Stops a point that moved from `from` at the first surface in the way, and
-## cancels its velocity into that surface.
 func _collide(p: Point, from: Vector3, radius: float) -> Dictionary:
 	var hit := _ray(from, p.pos)
 	if not hit.is_empty():
@@ -638,12 +539,8 @@ func _ray(from: Vector3, to: Vector3) -> Dictionary:
 
 # --- Recovery ------------------------------------------------------------
 
-## Once the crab has lain tipped over for a moment with its legs not holding
-## it up (in its own frame), rolls it back onto its feet while the legs flail.
-## Upside down, feet on the ground push along the body's down axis, so they
-## don't count; leaning up a wall, the feet push along its up axis, so they
-## do, and a lean isn't mistaken for being stuck. Past on its side, though,
-## it has gone over, and feet braced on a wall don't count either.
+## Rolls the crab back over once it has lain tipped over, unsupported by its
+## legs, for SELF_RIGHT_DELAY.
 func _apply_self_right(delta: float) -> void:
 	var up := global_basis.y
 	var held_up := _support > get_gravity().length() * mass * 0.3 and up.y > -0.2
@@ -653,12 +550,10 @@ func _apply_self_right(delta: float) -> void:
 		return
 	var axis := up.cross(Vector3.UP)
 	if axis.length_squared() < 0.01:
-		axis = global_basis.z  # flat on its back: roll over sideways
-	# Damped, so it rolls over and settles rather than tumbling past upright.
+		axis = global_basis.z
 	apply_torque(axis.normalized() * self_right_torque - angular_velocity * self_right_torque * 0.3)
 
 
-## While leaning on a wall, turns the body's up toward the target's, damped.
 func _apply_wall_roll() -> void:
 	if _wall_roll <= 0.0 or wall_roll_torque <= 0.0 or _righting:
 		return
@@ -681,7 +576,7 @@ func _pose_leg(leg: Leg) -> void:
 	outward -= up * outward.dot(up)
 	outward = outward.normalized() if outward.length_squared() > 1e-6 else global_basis * leg.out_local
 
-	# The dactyl stands out from the surface it's on, leaning in toward the body.
+	# Dactyl stands out from the surface, leaning in toward the body.
 	var normal := leg.normal if leg.planted else up
 	var inward := -(outward - normal * outward.dot(normal))
 	var tilt := deg_to_rad(dactyl_tilt_deg)
@@ -690,8 +585,7 @@ func _pose_leg(leg: Leg) -> void:
 		dactyl += inward.normalized() * sin(tilt)
 	var ankle := foot + dactyl * lengths.z
 
-	# Two-bone IK hip -> ankle with the knee bent upward, so the leg arcs up
-	# over the body and then down to the foot.
+	# Two-bone IK hip -> ankle, knee bent upward.
 	var to_ankle := ankle - hip
 	var dist := to_ankle.length()
 	var dir := to_ankle / dist if dist > 1e-5 else outward
@@ -702,7 +596,7 @@ func _pose_leg(leg: Leg) -> void:
 	var rise := sqrt(maxf(lengths.x * lengths.x - along * along, 0.0))
 	var knee := hip + dir * along + pole * rise
 	if dist > reach:
-		ankle = hip + dir * reach  # out of reach: let the dactyl stretch to the foot
+		ankle = hip + dir * reach
 
 	_place_segment(leg.segments[0], hip, knee)
 	_place_segment(leg.segments[1], knee, ankle)
@@ -710,11 +604,6 @@ func _pose_leg(leg: Leg) -> void:
 	leg.joints[0].global_position = hip
 	leg.joints[1].global_position = knee
 	leg.joints[2].global_position = ankle
-
-	leg.marker.visible = show_foot_markers
-	if show_foot_markers:
-		leg.marker.global_transform = Transform3D(Basis(), foot + Vector3.UP * 0.003)
-		leg.marker.material_override = _marker_planted_mat if leg.planted else _marker_free_mat
 
 
 func _place_segment(mi: MeshInstance3D, from: Vector3, to: Vector3) -> void:

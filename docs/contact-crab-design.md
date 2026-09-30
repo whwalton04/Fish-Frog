@@ -74,11 +74,17 @@ level.
 | Use | Target | Spring | Tether |
 |---|---|---|---|
 | Swinging foot | Foothold, lifted by up to `step_height` while far from it | Stiff, critically damped | Hip, 0.3 to 0.98 of leg reach |
-| Limp foot | Relaxed pose under the body, with gravity | Loose | Same |
+| Limp foot | Relaxed pose under the body, with gravity, damped against the body's motion there | Stiff, lightly damped (bouncy) | Same |
 
 A free foot plants when it reaches its foothold, or when it touches any
 surface within reach. This is how landing, and grabbing a wall mid-fall,
 both happen.
+
+When no leg has pushed for `AIRBORNE_DELAY` (thrown, falling, on its back),
+the crab is airborne: planted feet that can't push and are stretched past
+their rest length let go, and free feet ignore their footholds and hold the
+limp pose, so the legs stay rigid instead of reaching back to where they
+were. The first foot to touch something ends it.
 
 ## Footholds
 
