@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Shader" path="res://world/checker.gdshader" id="1_checker"]
-[ext_resource type="PackedScene" path="res://crab/crab.tscn" id="2_crab"]
+[ext_resource type="PackedScene" path="res://crab/crab2.tscn" id="2_crab"]
 [ext_resource type="Script" path="res://world/camera_rig.gd" id="3_cam"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
