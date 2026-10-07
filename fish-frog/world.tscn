@@ -5,12 +5,9 @@
 [ext_resource type="Script" uid="uid://deyak448gynlj" path="res://bird.gd" id="2_aqk2v"]
 [ext_resource type="Script" uid="uid://c251manuatwnb" path="res://camera_pivot.gd" id="3_036b0"]
 [ext_resource type="Script" uid="uid://kibsv5k7yh32" path="res://animation.gd" id="3_w4bpu"]
+[ext_resource type="PackedScene" uid="uid://c8qbjo0cbfb8x" path="res://low_poly_bird_animated.glb" id="4_dwbse"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_5abyb"]
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_o3yad"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_it2li"]
 
 [sub_resource type="Environment" id="Environment_g3bud"]
 background_mode = 1
@@ -83,36 +80,27 @@ _data = {
 &"slide": SubResource("Animation_leev5")
 }
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_qbube"]
-size = Vector3(7, 2, 0.5)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_u3tko"]
-size = Vector3(3, 2, 0.5)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_5me7x"]
-size = Vector3(2, 0.5, 0.5)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_t0nb6"]
-size = Vector3(2.5, 0.5, 3)
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_rxeai"]
-size = Vector3(3, 0.5, 3)
+size = Vector3(1.3574365, 0.26281127, 0.23897988)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_dwbse"]
+size = Vector3(1.3906324, 1.2884594, 9.665005)
 
 [node name="World" type="Node3D" unique_id=367260359]
 
 [node name="character" parent="." unique_id=1125830712 instance=ExtResource("2_7bd7c")]
-transform = Transform3D(-1, 2.98023e-08, -8.74228e-08, 2.98023e-08, 1, 0, 8.74228e-08, 0, -1, 0, 1, 0)
 process_mode = 4
+transform = Transform3D(-1, 2.98023e-08, -8.74228e-08, 2.98023e-08, 1, 0, 8.74228e-08, 0, -1, 0, 1, 0)
 visible = false
 collision_layer = 0
 collision_mask = 0
 
 [node name="bird" type="RigidBody3D" parent="." unique_id=358482082]
-position = Vector3(0, 3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
 collision_layer = 2
 collision_mask = 7
-lock_rotation = true
 can_sleep = false
+lock_rotation = true
 script = ExtResource("2_aqk2v")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="bird" unique_id=149149534]
@@ -129,9 +117,8 @@ spring_length = 4.0
 
 [node name="Visuals" type="Node3D" parent="bird" unique_id=1909521750]
 
-[node name="CSGMesh3D" type="CSGMesh3D" parent="bird/Visuals" unique_id=2080186258]
-mesh = SubResource("CapsuleMesh_o3yad")
-material = SubResource("StandardMaterial3D_it2li")
+[node name="Sketchfab_Scene" parent="bird/Visuals" unique_id=1470389269 instance=ExtResource("4_dwbse")]
+transform = Transform3D(-0.229, 0, -2.0019815e-08, 0, 0.252, 0, 2.0019815e-08, 0, -0.229, 0, -0.83, 0)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=691898158]
 environment = SubResource("Environment_g3bud")
@@ -160,9 +147,10 @@ material = SubResource("StandardMaterial3D_13kt2")
 shape = SubResource("BoxShape3D_dmhl4")
 
 [node name="CSGBox3D2" type="CSGBox3D" parent="." unique_id=223526915]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.20093346, 0.029271126, 1.6253262)
 use_collision = true
 collision_mask = 7
-size = Vector3(30, 2, 30)
+size = Vector3(400, 2, 400)
 material = SubResource("ShaderMaterial_rwhea")
 
 [node name="AnimationBody3D3" type="AnimatableBody3D" parent="." unique_id=279490860]
@@ -178,10 +166,6 @@ shape = SubResource("BoxShape3D_qmir8")
 transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
 size = Vector3(3, 2, 0.5)
 material = SubResource("ShaderMaterial_fbvl3")
-
-[node name="CSGBox3D9" type="CSGBox3D" parent="AnimationBody3D3" unique_id=72478314]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 2, 0.5)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=788466466]
 root_node = NodePath("../AnimationBody3D3")
@@ -219,131 +203,59 @@ It can be done by script so in the next version of it i will iomplement the scri
 [node name="StaticProps" type="Node3D" parent="." unique_id=1235809117]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 5.5)
 
-[node name="StaticBody3D" type="StaticBody3D" parent="StaticProps" unique_id=1870296935]
-transform = Transform3D(-2.33351e-15, 1, -4.37114e-08, -0.422618, -3.9616e-08, -0.906308, -0.906308, 1.84732e-08, 0.422618, -8, 2.3, -1)
+[node name="StaticBody3D9" type="StaticBody3D" parent="StaticProps" unique_id=465547754]
+transform = Transform3D(5.7306725e-06, 1.1461344e-05, 131.1025, -131.1025, 5.7306725e-06, 5.7306715e-06, -5.7306715e-06, -131.1025, 1.1461344e-05, -1.7999687, 127.697296, 310.69672)
 collision_layer = 6
 collision_mask = 7
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D" unique_id=791272949]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
-shape = SubResource("BoxShape3D_qbube")
-
-[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D" unique_id=1432074292]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 1.25, 0)
-size = Vector3(7, 2, 0.5)
-material = SubResource("ShaderMaterial_fbvl3")
-
-[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D" unique_id=884254375]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 1.25, 0)
-size = Vector3(7, 2, 0.5)
-
-[node name="StaticBody3D2" type="StaticBody3D" parent="StaticProps" unique_id=962545886]
-transform = Transform3D(-7.23586e-16, 1, -4.37114e-08, 5.21541e-08, -4.37114e-08, -1, -1, -1.33227e-15, -5.21541e-08, -6.75, 3.75, 3.55)
-collision_layer = 6
-collision_mask = 7
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D2" unique_id=1796201079]
-transform = Transform3D(1, 0, 0, 0, 1, 1.56635e-22, 0, 6.94832e-23, 1, 0, 0, 0)
-shape = SubResource("BoxShape3D_u3tko")
-
-[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D2" unique_id=1024086801]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 2, 0.5)
-material = SubResource("ShaderMaterial_fbvl3")
-
-[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D2" unique_id=1804810906]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 2, 0.5)
-
-[node name="StaticBody3D4" type="StaticBody3D" parent="StaticProps" unique_id=1119896409]
-transform = Transform3D(-7.23586e-16, 1, -4.37114e-08, 5.21541e-08, -4.37114e-08, -1, -1, -1.33227e-15, -5.21541e-08, 0.75, 3.75, 3.55)
-collision_layer = 6
-collision_mask = 7
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D4" unique_id=1520165608]
-transform = Transform3D(1, 0, 0, 0, 1, 1.56635e-22, 0, 6.94832e-23, 1, 0, 0, 0)
-shape = SubResource("BoxShape3D_u3tko")
-
-[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D4" unique_id=1930686560]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 2, 0.5)
-material = SubResource("ShaderMaterial_fbvl3")
-
-[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D4" unique_id=1755181395]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 2, 0.5)
-
-[node name="StaticBody3D5" type="StaticBody3D" parent="StaticProps" unique_id=1597265346]
-transform = Transform3D(1, -4.37114e-08, 5.21541e-08, 5.21541e-08, -4.37114e-08, -1, 4.37114e-08, 1, -4.37114e-08, 3.25, 2.5, 2.3)
-collision_layer = 6
-collision_mask = 7
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D5" unique_id=46179990]
-transform = Transform3D(1, 0, 1.64203e-15, 0, 1, 0, 1.64203e-15, 0, 1, 0, 0, -1.25)
-shape = SubResource("BoxShape3D_5me7x")
-
-[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D5" unique_id=528057221]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 1.64203e-15, 3.72529e-09, 1, 0, 0, -1.25)
-size = Vector3(2, 0.5, 0.5)
-material = SubResource("ShaderMaterial_fbvl3")
-
-[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D5" unique_id=1120393460]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 1.64203e-15, 3.72529e-09, 1, 0, 0, -1.25)
-size = Vector3(2, 0.5, 0.5)
-
-[node name="StaticBody3D8" type="StaticBody3D" parent="StaticProps" unique_id=1502303140]
-transform = Transform3D(1, -4.37114e-08, 5.21541e-08, 5.21541e-08, -4.37114e-08, -1, 4.37114e-08, 1, -4.37114e-08, 3.25, 2.5, 4.8)
-collision_layer = 6
-collision_mask = 7
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D8" unique_id=994762728]
-transform = Transform3D(1, 0, 1.64203e-15, 0, 1, 0, 1.64203e-15, 0, 1, 0, 0, -4.76837e-07)
-shape = SubResource("BoxShape3D_t0nb6")
-
-[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D8" unique_id=1343726103]
-transform = Transform3D(1, 0, 2.98023e-08, 0, 1, 3.72529e-09, 1.64203e-15, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(2, 0.5, 3)
-material = SubResource("ShaderMaterial_fbvl3")
-
-[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D8" unique_id=453924642]
-transform = Transform3D(1, -8.47033e-22, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(2, 0.5, 3)
-
-[node name="StaticBody3D6" type="StaticBody3D" parent="StaticProps" unique_id=662916917]
-transform = Transform3D(-8.74228e-08, -1, 4.37114e-08, 5.21541e-08, -4.37114e-08, -1, 1, -8.74228e-08, 5.21541e-08, 4.5, 2.5, 3.55)
-collision_layer = 6
-collision_mask = 7
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D6" unique_id=753571801]
-transform = Transform3D(1, 0, 0, 0, 1, 1.56635e-22, 0, 6.94833e-23, 1, 0, 0, -4.76837e-07)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D9" unique_id=2019937308]
+transform = Transform3D(0.975, 3.1974423e-14, 2.4695696e-14, -2.4868996e-14, 0.975, -4.021672e-12, -3.2147543e-14, 4.021672e-12, 0.975, 1.275343, 1.7970083, 1.0141337)
 shape = SubResource("BoxShape3D_rxeai")
 
-[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D6" unique_id=1092209094]
-transform = Transform3D(1, -8.47033e-22, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 0.5, 3)
+[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D9" unique_id=1747630469]
+transform = Transform3D(1.194, -7.1054275e-16, 6.352746e-25, 4.24194e-15, 0.2, -8.940697e-11, -1.5802452e-23, 7.4505807e-10, 0.024, 1.481, 1.796, 1.019)
+size = Vector3(1.445, 1.295, 10.415)
 material = SubResource("ShaderMaterial_fbvl3")
 
-[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D6" unique_id=1618066201]
-transform = Transform3D(1, -8.47033e-22, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 0.5, 3)
+[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D9" unique_id=1505457974]
+transform = Transform3D(1.194, -7.1054275e-16, -4.7645605e-24, 4.24194e-15, 0.2, -8.940697e-11, 2.5283934e-22, 7.4505807e-10, 0.024, 1.481, 1.796, 1.019)
+size = Vector3(1.445, 1.295, 10.415)
 
 [node name="StaticBody3D7" type="StaticBody3D" parent="StaticProps" unique_id=346260056]
-transform = Transform3D(-8.74228e-08, -1, 4.37114e-08, 5.21541e-08, -4.37114e-08, -1, 1, -8.74228e-08, 5.21541e-08, 2, 2.5, 3.55)
+transform = Transform3D(-5.004954e-07, -11.45, 5.004954e-07, 0, -5.004954e-07, -11.45, 11.45, -5.004954e-07, 2.1877348e-14, 26.825043, 2.5, 3.5500002)
 collision_layer = 6
 collision_mask = 7
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D7" unique_id=978887914]
-transform = Transform3D(1, 0, 0, 0, 1, 1.56635e-22, 0, 6.94833e-23, 1, 0, 0, -4.76837e-07)
-shape = SubResource("BoxShape3D_rxeai")
+transform = Transform3D(1, -7.1054274e-15, -1.7787692e-20, 7.1054274e-15, 1, -4.131806e-12, 2.727446e-19, 4.131806e-12, 1, 0.8098082, 1.1902544, -4.7137594)
+shape = SubResource("BoxShape3D_dwbse")
 
 [node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D7" unique_id=1976093836]
-transform = Transform3D(1, -8.47033e-22, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 0.5, 3)
+transform = Transform3D(1, -3.5527137e-15, 2.9802303e-08, 3.5527137e-15, 1, 3.725289e-09, 2.1175824e-22, 3.7252903e-09, 1, 0.8341697, 1.190334, -4.3525014)
+size = Vector3(1.445, 1.295, 10.415)
 material = SubResource("ShaderMaterial_fbvl3")
 
 [node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D7" unique_id=518759460]
-transform = Transform3D(1, -8.47033e-22, 2.98023e-08, 0, 1, 3.72529e-09, 0, 3.72529e-09, 1, 0, 0, 0)
-size = Vector3(3, 0.5, 3)
+transform = Transform3D(1, -3.5527137e-15, 2.1175824e-22, 3.5527137e-15, 1, -3.7252903e-09, 2.1175824e-22, 3.7252903e-09, 1, 0.8341697, 1.190334, -4.3525014)
+size = Vector3(1.445, 1.295, 10.415)
+
+[node name="StaticBody3D8" type="StaticBody3D" parent="StaticProps" unique_id=1476038920]
+transform = Transform3D(5.7306725e-06, 1.1461344e-05, 131.1025, -131.1025, 5.7306725e-06, 5.7306715e-06, -5.7306715e-06, -131.1025, 1.1461344e-05, 18.674011, 131.04251, 26.449997)
+collision_layer = 6
+collision_mask = 7
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticProps/StaticBody3D8" unique_id=1434377232]
+transform = Transform3D(1, 0, 0, 0, 1, 1.56635e-22, 0, 6.94833e-23, 1, 0.83, 1.19, 0.19)
+shape = SubResource("BoxShape3D_rxeai")
+
+[node name="CSGBox3D8" type="CSGBox3D" parent="StaticProps/StaticBody3D8" unique_id=941220792]
+transform = Transform3D(1, -3.5527137e-15, 2.9802301e-08, 3.5527137e-15, 1, 3.7252903e-09, -2.6865725e-16, 3.7252903e-09, 1, 0.83416986, 1.1903343, 0.18980674)
+size = Vector3(0.88, 0.1, 0.18)
+material = SubResource("ShaderMaterial_fbvl3")
+
+[node name="CSGBox3D9" type="CSGBox3D" parent="StaticProps/StaticBody3D8" unique_id=514814654]
+transform = Transform3D(1, -3.5527137e-15, -4.3149468e-16, 3.5527137e-15, 1, -3.7252903e-09, -2.6865725e-16, 3.7252903e-09, 1, 0.83416986, 1.1903343, 0.18980674)
+size = Vector3(0.88, 0.1, 0.18)
 
 [node name="Label3D4" type="Label3D" parent="." unique_id=68323675]
 transform = Transform3D(1.31134e-07, 0, -1, 0, 1, 0, 1, 0, 1.31134e-07, 7.74062, 2.3, 8.8)
