@@ -1,12 +1,13 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://jwj4qengayw3"]
 
-[ext_resource type="Script" path="res://crab/crab2.gd" id="1_crab2"]
+[ext_resource type="Script" uid="uid://2obt2nximl5j" path="res://crab/crab2.gd" id="1_crab2"]
+[ext_resource type="Script" path="res://world/foothold.gd" id="2_foothold"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_shell"]
 friction = 0.3
 
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_body"]
-points = PackedVector3Array(0.0000, 0.0420, 0.0000, 0.0000, -0.0420, 0.0000, 0.0775, 0.0364, 0.0000, 0.0716, 0.0364, 0.0239, 0.0548, 0.0364, 0.0442, 0.0297, 0.0364, 0.0577, 0.0000, 0.0364, 0.0625, -0.0297, 0.0364, 0.0577, -0.0548, 0.0364, 0.0442, -0.0716, 0.0364, 0.0239, -0.0775, 0.0364, 0.0000, -0.0716, 0.0364, -0.0239, -0.0548, 0.0364, -0.0442, -0.0297, 0.0364, -0.0577, -0.0000, 0.0364, -0.0625, 0.0297, 0.0364, -0.0577, 0.0548, 0.0364, -0.0442, 0.0716, 0.0364, -0.0239, 0.1342, 0.0210, 0.0000, 0.1240, 0.0210, 0.0414, 0.0949, 0.0210, 0.0765, 0.0514, 0.0210, 0.1000, 0.0000, 0.0210, 0.1083, -0.0514, 0.0210, 0.1000, -0.0949, 0.0210, 0.0765, -0.1240, 0.0210, 0.0414, -0.1342, 0.0210, 0.0000, -0.1240, 0.0210, -0.0414, -0.0949, 0.0210, -0.0765, -0.0514, 0.0210, -0.1000, -0.0000, 0.0210, -0.1083, 0.0514, 0.0210, -0.1000, 0.0949, 0.0210, -0.0765, 0.1240, 0.0210, -0.0414, 0.1550, 0.0000, 0.0000, 0.1432, 0.0000, 0.0478, 0.1096, 0.0000, 0.0884, 0.0593, 0.0000, 0.1155, 0.0000, 0.0000, 0.1250, -0.0593, 0.0000, 0.1155, -0.1096, 0.0000, 0.0884, -0.1432, 0.0000, 0.0478, -0.1550, 0.0000, 0.0000, -0.1432, 0.0000, -0.0478, -0.1096, 0.0000, -0.0884, -0.0593, 0.0000, -0.1155, -0.0000, 0.0000, -0.1250, 0.0593, 0.0000, -0.1155, 0.1096, 0.0000, -0.0884, 0.1432, 0.0000, -0.0478, 0.1342, -0.0210, 0.0000, 0.1240, -0.0210, 0.0414, 0.0949, -0.0210, 0.0765, 0.0514, -0.0210, 0.1000, 0.0000, -0.0210, 0.1083, -0.0514, -0.0210, 0.1000, -0.0949, -0.0210, 0.0765, -0.1240, -0.0210, 0.0414, -0.1342, -0.0210, 0.0000, -0.1240, -0.0210, -0.0414, -0.0949, -0.0210, -0.0765, -0.0514, -0.0210, -0.1000, -0.0000, -0.0210, -0.1083, 0.0514, -0.0210, -0.1000, 0.0949, -0.0210, -0.0765, 0.1240, -0.0210, -0.0414, 0.0775, -0.0364, 0.0000, 0.0716, -0.0364, 0.0239, 0.0548, -0.0364, 0.0442, 0.0297, -0.0364, 0.0577, 0.0000, -0.0364, 0.0625, -0.0297, -0.0364, 0.0577, -0.0548, -0.0364, 0.0442, -0.0716, -0.0364, 0.0239, -0.0775, -0.0364, 0.0000, -0.0716, -0.0364, -0.0239, -0.0548, -0.0364, -0.0442, -0.0297, -0.0364, -0.0577, -0.0000, -0.0364, -0.0625, 0.0297, -0.0364, -0.0577, 0.0548, -0.0364, -0.0442, 0.0716, -0.0364, -0.0239)
+points = PackedVector3Array(0, 0.042, 0, 0, -0.042, 0, 0.0775, 0.0364, 0, 0.0716, 0.0364, 0.0239, 0.0548, 0.0364, 0.0442, 0.0297, 0.0364, 0.0577, 0, 0.0364, 0.0625, -0.0297, 0.0364, 0.0577, -0.0548, 0.0364, 0.0442, -0.0716, 0.0364, 0.0239, -0.0775, 0.0364, 0, -0.0716, 0.0364, -0.0239, -0.0548, 0.0364, -0.0442, -0.0297, 0.0364, -0.0577, 0, 0.0364, -0.0625, 0.0297, 0.0364, -0.0577, 0.0548, 0.0364, -0.0442, 0.0716, 0.0364, -0.0239, 0.1342, 0.021, 0, 0.124, 0.021, 0.0414, 0.0949, 0.021, 0.0765, 0.0514, 0.021, 0.1, 0, 0.021, 0.1083, -0.0514, 0.021, 0.1, -0.0949, 0.021, 0.0765, -0.124, 0.021, 0.0414, -0.1342, 0.021, 0, -0.124, 0.021, -0.0414, -0.0949, 0.021, -0.0765, -0.0514, 0.021, -0.1, 0, 0.021, -0.1083, 0.0514, 0.021, -0.1, 0.0949, 0.021, -0.0765, 0.124, 0.021, -0.0414, 0.155, 0, 0, 0.1432, 0, 0.0478, 0.1096, 0, 0.0884, 0.0593, 0, 0.1155, 0, 0, 0.125, -0.0593, 0, 0.1155, -0.1096, 0, 0.0884, -0.1432, 0, 0.0478, -0.155, 0, 0, -0.1432, 0, -0.0478, -0.1096, 0, -0.0884, -0.0593, 0, -0.1155, 0, 0, -0.125, 0.0593, 0, -0.1155, 0.1096, 0, -0.0884, 0.1432, 0, -0.0478, 0.1342, -0.021, 0, 0.124, -0.021, 0.0414, 0.0949, -0.021, 0.0765, 0.0514, -0.021, 0.1, 0, -0.021, 0.1083, -0.0514, -0.021, 0.1, -0.0949, -0.021, 0.0765, -0.124, -0.021, 0.0414, -0.1342, -0.021, 0, -0.124, -0.021, -0.0414, -0.0949, -0.021, -0.0765, -0.0514, -0.021, -0.1, 0, -0.021, -0.1083, 0.0514, -0.021, -0.1, 0.0949, -0.021, -0.0765, 0.124, -0.021, -0.0414, 0.0775, -0.0364, 0, 0.0716, -0.0364, 0.0239, 0.0548, -0.0364, 0.0442, 0.0297, -0.0364, 0.0577, 0, -0.0364, 0.0625, -0.0297, -0.0364, 0.0577, -0.0548, -0.0364, 0.0442, -0.0716, -0.0364, 0.0239, -0.0775, -0.0364, 0, -0.0716, -0.0364, -0.0239, -0.0548, -0.0364, -0.0442, -0.0297, -0.0364, -0.0577, 0, -0.0364, -0.0625, 0.0297, -0.0364, -0.0577, 0.0548, -0.0364, -0.0442, 0.0716, -0.0364, -0.0239)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shell"]
 albedo_color = Color(0.82, 0.32, 0.18, 1)
@@ -30,7 +31,7 @@ height = 0.02
 radial_segments = 12
 rings = 6
 
-[node name="Crab" type="RigidBody3D"]
+[node name="Crab" type="RigidBody3D" unique_id=2136167259 groups=["animals"]]
 collision_layer = 2
 collision_mask = 3
 mass = 5.0
@@ -39,17 +40,67 @@ can_sleep = false
 angular_damp = 1.0
 script = ExtResource("1_crab2")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=131892331]
 shape = SubResource("ConvexPolygonShape3D_body")
 
-[node name="Carapace" type="MeshInstance3D" parent="."]
+[node name="Carapace" type="MeshInstance3D" parent="." unique_id=421834836]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.8, 0, 0, 0)
 mesh = SubResource("SphereMesh_shell")
 
-[node name="EyeL" type="MeshInstance3D" parent="."]
+[node name="EyeL" type="MeshInstance3D" parent="." unique_id=937935797]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.033, 0.024, -0.113)
 mesh = SubResource("SphereMesh_eye")
 
-[node name="EyeR" type="MeshInstance3D" parent="."]
+[node name="EyeR" type="MeshInstance3D" parent="." unique_id=1798063352]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.033, 0.024, -0.113)
 mesh = SubResource("SphereMesh_eye")
+
+[node name="Footholds" type="Node3D" parent="."]
+
+[node name="FrontR" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.086, 0.025, -0.083)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3
+
+[node name="FrontMidR" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.129, 0.025, -0.028)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3
+
+[node name="BackMidR" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.129, 0.025, 0.028)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3
+
+[node name="BackR" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.086, 0.025, 0.083)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3
+
+[node name="FrontL" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.086, 0.025, -0.083)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3
+
+[node name="FrontMidL" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.129, 0.025, -0.028)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3
+
+[node name="BackMidL" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.129, 0.025, 0.028)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3
+
+[node name="BackL" type="Marker3D" parent="Footholds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.086, 0.025, 0.083)
+gizmo_extents = 0.03
+script = ExtResource("2_foothold")
+capture_radius = 0.3

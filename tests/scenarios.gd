@@ -17,13 +17,14 @@ var rig: Node3D
 func _initialize() -> void:
 	var world: Node = load("res://world/test_terrain.tscn").instantiate()
 	var scene_path := OS.get_environment("CRAB_SCENE")
-	# The scenarios are about one crab: keep the first and drop the rest.
+	# The scenarios are about one crab: keep the player's first and drop the
+	# rest, strays included.
 	var player: Node = world.get_node("Player")
-	var animals: Array = player.get_animals()
-	crab = animals[0]
-	for extra in animals.slice(1):
-		player.remove_child(extra)
-		extra.free()
+	crab = player.get_animals()[0]
+	for extra in world.find_children("*", "RigidBody3D", true, false):
+		if extra != crab and "move_direction" in extra:
+			extra.get_parent().remove_child(extra)
+			extra.free()
 	if scene_path != "":
 		var replacement: Node3D = load(scene_path).instantiate()
 		replacement.transform = crab.transform

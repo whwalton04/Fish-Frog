@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://vr01lr4hdw08"]
 
 [ext_resource type="Shader" uid="uid://cbacne80m3yug" path="res://world/checker.gdshader" id="1_checker"]
-[ext_resource type="PackedScene" path="res://crab/crab2.tscn" id="2_crab"]
+[ext_resource type="PackedScene" uid="uid://jwj4qengayw3" path="res://crab/crab2.tscn" id="2_crab"]
 [ext_resource type="PackedScene" path="res://player/player.tscn" id="3_player"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
@@ -105,7 +105,7 @@ shape = SubResource("BoxShape3D_ramp")
 mesh = SubResource("BoxMesh_ramp")
 
 [node name="Platform" type="StaticBody3D" parent="." unique_id=1687294253]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.035, -9.596986)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7224196, -9.596986)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Platform" unique_id=1939883181]
 shape = SubResource("BoxShape3D_platform")
@@ -114,7 +114,7 @@ shape = SubResource("BoxShape3D_platform")
 mesh = SubResource("BoxMesh_platform")
 
 [node name="Hump" type="StaticBody3D" parent="." unique_id=554785274]
-transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 8, -4, -6)
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 8.711294, -4, -6)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hump" unique_id=131308248]
 shape = SubResource("CylinderShape3D_hump")
@@ -142,5 +142,20 @@ mesh = SubResource("SphereMesh_dome")
 
 [node name="Player" parent="." unique_id=1115223539 instance=ExtResource("3_player")]
 
-[node name="Crab" parent="Player" unique_id=39499894 instance=ExtResource("2_crab")]
+[node name="Crab1" parent="Player" unique_id=39499894 instance=ExtResource("2_crab")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.107, 0)
+
+[node name="Crab2" parent="." unique_id=1402586731 instance=ExtResource("2_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.107, 3)
+
+[node name="Crab3" parent="." unique_id=871354022 instance=ExtResource("2_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.107, 3)
+
+[node name="Crab4" parent="." unique_id=674859475 instance=ExtResource("2_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.107, 7)
+
+[node name="Crab5" parent="." unique_id=1672401199 instance=ExtResource("2_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.107, -2)
+
+[node name="Crab6" parent="." unique_id=479283294 instance=ExtResource("2_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.107, 7)

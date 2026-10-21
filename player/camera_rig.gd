@@ -1,6 +1,7 @@
 extends Node3D
-## Third-person orbit camera around the player's animals. Mouse to look, wheel
-## to zoom, Esc frees the mouse, click to capture it again.
+## Third-person orbit camera around the animals the player steers: the group,
+## or the one animal being controlled. Mouse to look, wheel to zoom, Esc frees
+## the mouse, click to capture it again.
 
 @export var player: Player
 @export var distance := 1.2
@@ -8,6 +9,7 @@ extends Node3D
 @export var max_distance := 3.5
 ## How much further out the camera sits as the group grows: the distance
 ## scales by 1 + this * (sqrt(animals) - 1), so one animal is unchanged.
+## Controlling a single animal zooms back in.
 @export var group_zoom := 0.4
 @export var height_offset := 0.12
 @export var mouse_sensitivity := 0.003
@@ -29,7 +31,8 @@ func _ready() -> void:
 	if player:
 		global_position = player.get_center() + Vector3.UP * height_offset
 		_zoom = _group_zoom()
-		for animal in player.get_animals():
+		var animals: Array = player.get_animals() + get_tree().get_nodes_in_group(Player.ANIMAL_GROUP)
+		for animal in animals:
 			if animal is CollisionObject3D:
 				_arm.add_excluded_object(animal.get_rid())
 
@@ -61,4 +64,4 @@ func _process(delta: float) -> void:
 
 
 func _group_zoom() -> float:
-	return 1.0 + group_zoom * (sqrt(maxf(player.get_animals().size(), 1.0)) - 1.0)
+	return 1.0 + group_zoom * (sqrt(maxf(player.get_steered().size(), 1.0)) - 1.0)

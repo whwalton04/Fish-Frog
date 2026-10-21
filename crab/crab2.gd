@@ -6,59 +6,71 @@ extends RigidBody3D
 ## the target pose, limited by the friction cone at the foot. Unplanted feet
 ## are points on tethers. The leg meshes are purely visual IK.
 
-@export_group("Movement")
-@export var move_speed := 3.2
-## rad/s
-@export var turn_rate := 8.0
-## rad/s
-@export var tilt_rate := 4.0
-## How fast pushing into a wall rolls the crab up it (rad/s).
-@export var wall_roll_rate := 0.5
+## Each setting is relative to the crab's mass, size or stride, so changing one
+## doesn't upset the others.
 
-@export_group("Legs")
-@export var ride_height := 0.107
-## Hip spring along the body's up axis and sideways (N/m).
-@export var leg_stiffness := 330.0
-@export var leg_lateral_stiffness := 90.0
-## Pulls hip velocity toward the wished velocity (N·s/m); drives the body.
-@export var leg_damping := 30.0
-@export var leg_max_force := 60.0
-@export var foot_friction := 0.8
-## Leaves out other crabs, which are bumped into but not walked on.
-@export_flags_3d_physics var foot_mask := 1
-## 0..1
-@export var terrain_follow := 1.0
+## Scales the whole crab: body, collision, legs and gait. Mass is left to the
+## body's own `mass`. Applied on ready.
+@export_range(0.25, 4.0, 0.01) var size := 1.0
+## m/s
+@export_range(0.0, 10.0, 0.1) var move_speed := 3.2
+## rad/s. The body tilts to follow the ground at half this.
+@export_range(0.5, 20.0, 0.1) var turn_rate := 8.0
+## Bounce frequency of the body on its legs (Hz). Also how quickly it picks
+## up speed, until grip limits it.
+@export_range(1.0, 8.0, 0.1) var stance_hz := 3.7
+## Most a leg can push, in multiples of its share of the body's weight.
+@export_range(1.5, 30.0, 0.1) var strength := 10.0
+## Foot friction: sideways force per unit of push. Caps acceleration at about
+## grip × g.
+@export_range(0.1, 2.0, 0.01) var grip := 0.8
+## How far a foot drifts from its foothold before stepping, as a fraction of
+## leg length.
+@export_range(0.1, 0.6, 0.01) var stride := 0.4
+## How fast pushing into a wall rolls the crab up it (rad/s). 0 never climbs.
+@export_range(0.0, 2.0, 0.01) var climb_rate := 0.5
+@export var can_self_right := true
 
-@export_group("Gait")
-@export var step_threshold := 0.14
-## Used when standing still so the stance tidies itself up.
-@export var settle_threshold := 0.027
-## 1/s²
-@export var swing_stiffness := 80000.0
-@export var step_height := 0.05
-## Seconds of velocity to place feet ahead of the body.
-@export var velocity_lead := 0.1
-@export var foot_placement_jitter := 0.027
-
-@export_group("Limp")
-## Spring (1/s²) and damping (1/s) holding a foot with no foothold on the body.
-@export var limp_stiffness := 400.0
-@export var limp_damping := 8.0
-
-@export_group("Recovery")
-## 0 disables.
-@export var self_right_torque := 12.0
-## Torque per radian holding the lean while rolling up a wall. 0 disables.
-@export var wall_roll_torque := 6.0
-
-@export_group("Shape")
-## Half width (x) and half length (z) of the carapace.
-@export var body_half_extents := Vector2(0.167, 0.133)
-@export var hip_height := -0.01
-## Merus, carpus+propodus, dactyl lengths (before per-leg scale).
-@export var segment_lengths := Vector3(0.14, 0.133, 0.08)
-@export var dactyl_tilt_deg := 20.0
+@export_group("Look")
 @export var leg_color := Color(0.88, 0.42, 0.24)
+## What the feet can stand on, other crabs included.
+@export_flags_3d_physics var foot_mask := 3
+
+# Geometry at size 1.
+const BODY_HALF_EXTENTS := Vector2(0.167, 0.133)
+const HIP_HEIGHT := -0.01
+const RIDE_HEIGHT := 0.107
+const STEP_HEIGHT := 0.05
+# Belly probes: rays start this far above the centre, one this far ahead.
+const BODY_HALF_HEIGHT := 0.042
+const BELLY_PROBE_HEIGHT := 0.1
+const BELLY_LEAD := 0.22
+const BELLY_CLEARANCE := 0.02
+const MAX_BELLY_LIFT := 0.14
+# How far above the hip a foot looks for the top of a wall, × leg reach.
+const STEP_UP_RAISE := 0.4
+const FOOT_RADIUS := 0.002
+# Merus, carpus+propodus, dactyl.
+const SEGMENT_LENGTHS := Vector3(0.14, 0.133, 0.08)
+const DACTYL_TILT_DEG := 20.0
+
+# Legs
+const LATERAL_STIFFNESS := 0.27  # × vertical stiffness
+const STANCE_DAMPING_RATIO := 1.04
+# Gait, as fractions of the step threshold.
+const SETTLE_FRACTION := 0.2
+const JITTER_FRACTION := 0.2
+# Seconds of velocity to place feet ahead of the body.
+const LEAD_TIME := 0.1
+# Free feet: springs in 1/s², damping in 1/s.
+const SWING_STIFFNESS := 80000.0
+const LIMP_STIFFNESS := 400.0
+const LIMP_DAMPING := 8.0
+# Recovery torques, in units of _torque_scale().
+const SELF_RIGHT_TORQUE := 0.245
+const SELF_RIGHT_DAMPING := 0.23
+const WALL_ROLL_TORQUE := 0.122  # per radian
+const WALL_ROLL_DAMPING := 0.038
 
 # Per-leg layout, front to back. Degrees from the side axis; negative is forward.
 const HIP_ANGLES := [-40.0, -14.0, 12.0, 36.0]
@@ -71,6 +83,14 @@ const MIN_REACH := 0.3
 const MIN_SPREAD := 0.1
 const MAX_RAISE := 0.5  # sin(30°)
 const MAX_REACH := 0.98
+## A foot on a foothold may stand this far inward of its hip and this close to
+## it, × reach, so it can straddle something narrower than its stance from
+## lying on it, rising as the feet take hold.
+const FOOTHOLD_INWARD := 0.1
+const FOOTHOLD_MIN_REACH := 0.15
+## A held foothold is kept until the foot's usual spot is this many capture
+## radii away, so the foot doesn't flick between it and the ground.
+const FOOTHOLD_KEEP := 1.5
 # Below MAX_REACH so a fresh foot isn't released straight away.
 const HOLD_REACH := 0.95
 const SELF_RIGHT_DELAY := 0.5
@@ -79,7 +99,6 @@ const MAX_PITCH := 0.466  # tan(25°)
 # Surfaces with normal.y below this (cos 60°) are walls.
 const WALL_NORMAL_Y := 0.5
 const WALL_ROLL_LAG := 0.35
-const FOOT_RADIUS := 0.002
 
 class Point:
 	var pos: Vector3
@@ -95,10 +114,17 @@ class Leg:
 	var planted := false
 	var normal := Vector3.UP
 	var collider: Object
+	# Foot and normal in the collider's frame, so the foot rides it.
+	var foot_local: Vector3
+	var normal_local: Vector3
 	var has_hold := false
 	var hold: Vector3
 	var hold_normal := Vector3.UP
 	var hold_collider: Object
+	var hold_local: Vector3
+	var hold_normal_local: Vector3
+	var hold_foothold: Foothold
+	var foothold: Foothold  # the one the planted foot is on
 	var segments: Array[MeshInstance3D] = []
 	var joints: Array[MeshInstance3D] = []
 
@@ -109,6 +135,13 @@ var facing_direction := Vector3.ZERO
 
 var _legs: Array[Leg] = []
 var _initialized := false
+# Size as applied on ready, and the settings derived from the exports.
+var _size := 1.0
+var _segment_lengths := SEGMENT_LENGTHS
+var _leg_stiffness := 0.0
+var _leg_damping := 0.0
+var _leg_max_force := 0.0
+var _step_threshold := 0.0
 var _wish := Vector3.ZERO
 var _drive := Vector3.ZERO
 var _desired_facing := Vector3.FORWARD
@@ -123,10 +156,15 @@ var _pushing := false
 var _air_time := 0.0
 var _airborne := false
 var _righting := false
+var _under: Object  # what's right under the belly, if anything
 var _time := 0.0
 
 
 func _ready() -> void:
+	_size = size
+	_segment_lengths = SEGMENT_LENGTHS * _size
+	_apply_size()
+
 	var leg_mat := StandardMaterial3D.new()
 	leg_mat.albedo_color = leg_color
 	leg_mat.roughness = 0.6
@@ -135,8 +173,8 @@ func _ready() -> void:
 	for radii in SEGMENT_RADII:
 		var mesh := CylinderMesh.new()
 		mesh.height = 1.0
-		mesh.bottom_radius = radii.x
-		mesh.top_radius = radii.y
+		mesh.bottom_radius = radii.x * _size
+		mesh.top_radius = radii.y * _size
 		mesh.radial_segments = 10
 		mesh.rings = 1
 		mesh.material = leg_mat
@@ -144,8 +182,8 @@ func _ready() -> void:
 	var joint_meshes: Array[SphereMesh] = []
 	for radii in SEGMENT_RADII:
 		var mesh := SphereMesh.new()
-		mesh.radius = radii.x * 1.1
-		mesh.height = radii.x * 2.2
+		mesh.radius = radii.x * 1.1 * _size
+		mesh.height = radii.x * 2.2 * _size
 		mesh.radial_segments = 10
 		mesh.rings = 5
 		mesh.material = leg_mat
@@ -169,10 +207,10 @@ func _make_leg(side: float, i: int) -> Leg:
 	var foot_dir := _side_dir(side, FOOT_ANGLES[i])
 	leg.length_scale = LEG_SCALE[i]
 	leg.hip_local = Vector3(
-		hip_dir.x * body_half_extents.x * 0.9, hip_height, hip_dir.z * body_half_extents.y * 0.9)
+		hip_dir.x * BODY_HALF_EXTENTS.x * 0.9, HIP_HEIGHT, hip_dir.z * BODY_HALF_EXTENTS.y * 0.9) * _size
 	leg.out_local = foot_dir
-	leg.rest_local = leg.hip_local + foot_dir * FOOT_REACH[i] * leg.length_scale
-	leg.rest_local.y = -ride_height
+	leg.rest_local = leg.hip_local + foot_dir * FOOT_REACH[i] * leg.length_scale * _size
+	leg.rest_local.y = -RIDE_HEIGHT * _size
 	leg.group = (i + (1 if side > 0.0 else 0)) % 2
 	leg.foot.pos = to_global(leg.rest_local)
 	return leg
@@ -181,6 +219,25 @@ func _make_leg(side: float, i: int) -> Leg:
 func _side_dir(side: float, degrees: float) -> Vector3:
 	var r := deg_to_rad(degrees)
 	return Vector3(side * cos(r), 0.0, sin(r))
+
+
+## Scales the scene's own children (collision, carapace, eyes) to `size`.
+## Convex shapes are rebuilt rather than scaled, since physics doesn't like
+## scaled shapes.
+func _apply_size() -> void:
+	if is_equal_approx(_size, 1.0):
+		return
+	for child in get_children():
+		if child is CollisionShape3D and child.shape is ConvexPolygonShape3D:
+			var shape: ConvexPolygonShape3D = child.shape.duplicate()
+			var points := shape.points
+			for i in points.size():
+				points[i] *= _size
+			shape.points = points
+			child.shape = shape
+			child.position *= _size
+		elif child is Node3D:
+			child.transform = child.transform.scaled(Vector3.ONE * _size)
 
 
 func _add_visual(mesh: Mesh) -> MeshInstance3D:
@@ -193,13 +250,16 @@ func _add_visual(mesh: Mesh) -> MeshInstance3D:
 
 func _physics_process(delta: float) -> void:
 	_time += delta
+	_update_tuning()
 	_wish = _get_wish_velocity()
+	_follow_surfaces()
 	_update_target_basis(delta)
 	_update_gait()
 
 	_support = 0.0
 	_pushing = false
 	_fit_center = _fit_body_center()
+	_fit_center += _target_basis.y * _belly_lift()
 	for leg in _legs:
 		if leg.planted:
 			_push_with_leg(leg)
@@ -216,6 +276,15 @@ func _process(_delta: float) -> void:
 	for leg in _legs:
 		_pose_leg(leg)
 
+
+## Derives the leg and gait settings from the exports every tick, so they can
+## be tuned while running (all but size).
+func _update_tuning() -> void:
+	var omega := TAU * stance_hz
+	_leg_stiffness = mass * omega * omega / _legs.size()
+	_leg_damping = STANCE_DAMPING_RATIO * 2.0 * mass * omega / _legs.size()
+	_leg_max_force = strength * mass * get_gravity().length() / _legs.size()
+	_step_threshold = stride * _leg_reach_full()
 
 # --- Target pose --------------------------------------------------------------
 
@@ -243,7 +312,7 @@ func _update_target_basis(delta: float) -> void:
 
 	var up := Vector3.UP
 	if ground_sum.length_squared() > 1e-6:
-		up = up.lerp(ground_sum.normalized(), terrain_follow).normalized()
+		up = (ground_sum.normalized() + _foot_plane_up()).normalized()
 		# Crabs roll freely but pitch little.
 		var pitch := up.dot(forward)
 		var rest := up - forward * pitch
@@ -256,25 +325,62 @@ func _update_target_basis(delta: float) -> void:
 		up = up.rotated(Vector3.UP.cross(_wall_normal).normalized(), _wall_roll)
 
 	var tilt := _target_basis.y.angle_to(up)
-	if tilt > tilt_rate * delta:
-		up = _target_basis.y.slerp(up, tilt_rate * delta / tilt).normalized()
+	var max_tilt := turn_rate * 0.5 * delta
+	if tilt > max_tilt:
+		up = _target_basis.y.slerp(up, max_tilt / tilt).normalized()
 	var level_forward := forward - up * forward.dot(up)
 	if level_forward.length_squared() > 1e-4:
 		_target_basis = Basis.looking_at(level_forward, up)
+
+
+## Up of the plane best fitting the planted ground feet, so feet standing
+## higher on one side (on a step, or another crab) tilt the body. Falls back to
+## the current up with fewer than three feet.
+func _foot_plane_up() -> Vector3:
+	var points: Array[Vector3] = []
+	var mean := Vector3.ZERO
+	var to_local := _target_basis.inverse()
+	for leg in _legs:
+		if leg.planted and leg.normal.y > WALL_NORMAL_Y:
+			var p := to_local * leg.foot.pos
+			points.append(p)
+			mean += p
+	if points.size() < 3:
+		return _target_basis.y
+	mean /= points.size()
+	# Least squares y = a x + b z through the mean.
+	var sxx := 0.0
+	var sxz := 0.0
+	var szz := 0.0
+	var sxy := 0.0
+	var szy := 0.0
+	for p in points:
+		var d := p - mean
+		sxx += d.x * d.x
+		sxz += d.x * d.z
+		szz += d.z * d.z
+		sxy += d.x * d.y
+		szy += d.z * d.y
+	var det := sxx * szz - sxz * sxz
+	if det < 1e-8 * _size * _size * _size * _size:
+		return _target_basis.y
+	var a := (sxy * szz - szy * sxz) / det
+	var b := (szy * sxx - sxy * sxz) / det
+	return (_target_basis * Vector3(-a, 1.0, -b)).normalized()
 
 
 func _update_wall_roll(wall_sum: Vector3, delta: float) -> void:
 	var pushing := _pushing_into(wall_sum)
 	if pushing:
 		_wall_normal = Vector3(wall_sum.x, 0.0, wall_sum.z).normalized()
-	if global_basis.y.y < -0.3:
+	if global_basis.y.y < -0.3 or climb_rate <= 0.0:
 		_wall_roll = 0.0
 	elif pushing:
 		# Only grows while the body keeps up.
 		if _target_basis.y.angle_to(Vector3.UP) - global_basis.y.angle_to(Vector3.UP) < WALL_ROLL_LAG:
-			_wall_roll += wall_roll_rate * delta
+			_wall_roll += climb_rate * delta
 	else:
-		_wall_roll = maxf(_wall_roll - wall_roll_rate * 2.0 * delta, 0.0)
+		_wall_roll = maxf(_wall_roll - climb_rate * 2.0 * delta, 0.0)
 
 
 func _pushing_into(wall_normal: Vector3) -> bool:
@@ -290,12 +396,13 @@ func _pushing_into(wall_normal: Vector3) -> bool:
 ## eighth of the weight and drives toward the wished velocity, limited by the
 ## friction cone.
 func _push_with_leg(leg: Leg) -> void:
-	if not _in_reach(leg, leg.foot.pos, MAX_REACH):
+	if not _in_reach(leg, leg.foot.pos, MAX_REACH, leg.foothold != null):
 		leg.planted = false
 		return
 	var hip := to_global(leg.hip_local)
 	var offset := hip - global_position
-	var hip_vel := linear_velocity + angular_velocity.cross(offset)
+	var hip_vel := linear_velocity + angular_velocity.cross(offset) \
+			- _surface_velocity(leg.collider, leg.foot.pos)
 	var up := _target_basis.y
 
 	# A foot can't pull the body toward its surface.
@@ -306,10 +413,10 @@ func _push_with_leg(leg: Leg) -> void:
 
 	var error := _fit_center + _target_basis * leg.hip_local - hip
 	var lift := up * error.dot(up)
-	var force := lift * leg_stiffness + (error - lift) * leg_lateral_stiffness \
-			+ (drive - hip_vel) * leg_damping \
+	var force := lift * _leg_stiffness + (error - lift) * _leg_stiffness * LATERAL_STIFFNESS \
+			+ (drive - hip_vel) * _leg_damping \
 			- get_gravity() * mass / _legs.size()
-	force = _friction_cone(force, leg.normal).limit_length(leg_max_force)
+	force = _friction_cone(force, leg.normal).limit_length(_leg_max_force)
 	if force == Vector3.ZERO:
 		if _airborne and hip.distance_to(leg.foot.pos) > (leg.rest_local - leg.hip_local).length():
 			leg.planted = false
@@ -324,6 +431,34 @@ func _push_with_leg(leg: Leg) -> void:
 		body.apply_force(-force, leg.foot.pos - body.global_position)
 
 
+## How far to raise the body above the feet's fit so its belly clears what's
+## under it, or just ahead of it, such as another crab. Ahead looks higher, so
+## the crab walking into another is the one that goes on top.
+func _belly_lift() -> float:
+	if _airborne or _righting:
+		return 0.0
+	var up := _target_basis.y
+	var start := global_position + up * BELLY_PROBE_HEIGHT * _size
+	var samples: Array[Vector3] = [Vector3.ZERO]
+	for corner in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+		samples.append(_target_basis * (corner * Vector3(BODY_HALF_EXTENTS.x, 0, BODY_HALF_EXTENTS.y)) * _size)
+	if _wish.length_squared() > 0.01:
+		samples.append(_drive.normalized() * BELLY_LEAD * _size)
+	var lift := 0.0
+	for i in samples.size():
+		var from: Vector3 = start + samples[i]
+		var hit := _ray(from, from - up * (BELLY_PROBE_HEIGHT + RIDE_HEIGHT) * _size)
+		if hit.is_empty():
+			continue
+		# Under the body, only what's below the centre counts, or a crab being
+		# climbed onto would rise to clear the climber.
+		if i < 5 and (hit.position - global_position).dot(up) > 0.0:
+			continue
+		var needed: float = (hit.position - _fit_center).dot(up) + (BODY_HALF_HEIGHT + BELLY_CLEARANCE) * _size
+		lift = maxf(lift, needed)
+	return minf(lift, MAX_BELLY_LIFT * _size)
+
+
 ## Average body centre implied by each planted foot's rest spot. Wall feet
 ## count only when no foot is on the ground.
 func _fit_body_center() -> Vector3:
@@ -334,7 +469,7 @@ func _fit_body_center() -> Vector3:
 	for leg in _legs:
 		if not leg.planted:
 			continue
-		var center := leg.foot.pos - _target_basis * leg.rest_local
+		var center := leg.foot.pos - _target_basis * _fit_rest(leg)
 		if leg.normal.y > WALL_NORMAL_Y:
 			ground += center
 			ground_count += 1
@@ -346,21 +481,38 @@ func _fit_body_center() -> Vector3:
 	return wall / wall_count if wall_count > 0 else global_position
 
 
+## The foot's rest spot, or for a foot on a foothold, the spot along the leg's
+## outward line level with it: a foothold may sit anywhere from under the hip
+## to full stretch, and only its height and sideways offset place the body.
+func _fit_rest(leg: Leg) -> Vector3:
+	if not leg.foothold:
+		return leg.rest_local
+	var local := _target_basis.inverse() * (leg.foot.pos - global_position)
+	var full := Vector2(leg.rest_local.x - leg.hip_local.x, leg.rest_local.z - leg.hip_local.z).length()
+	var along := clampf((local - leg.hip_local).dot(leg.out_local), 0.0, full)
+	var rest := leg.hip_local + leg.out_local * along
+	rest.y = leg.rest_local.y
+	return rest
+
+
 ## Push only, never pull; sideways force at most friction times push.
 func _friction_cone(force: Vector3, normal: Vector3) -> Vector3:
 	var push := force.dot(normal)
 	if push <= 0.0:
 		return Vector3.ZERO
 	var slide := force - normal * push
-	return normal * push + slide.limit_length(foot_friction * push)
+	return normal * push + slide.limit_length(grip * push)
 
 
 func _update_gait() -> void:
-	var flat_vel := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
+	var rel_vel := linear_velocity - _ground_velocity()
+	var flat_vel := Vector3(rel_vel.x, 0.0, rel_vel.z)
 	# Capped so feet spend as long ahead of the hip as behind it.
-	var lead := (flat_vel * velocity_lead).limit_length(step_threshold * 0.5)
-	var moving := flat_vel.length() > 0.1 or absf(angular_velocity.y) > 0.4
-	var threshold := step_threshold if moving else settle_threshold
+	var lead := (flat_vel * LEAD_TIME).limit_length(_step_threshold * 0.5)
+	var moving := flat_vel.length() > 0.1 * _size or absf(angular_velocity.y) > 0.4
+	var threshold := _step_threshold if moving else _step_threshold * SETTLE_FRACTION
+	var belly := _ray(global_position, global_position - global_basis.y * RIDE_HEIGHT * 0.8 * _size)
+	_under = belly.get("collider")
 	var swinging := [false, false]
 	for leg in _legs:
 		if not leg.planted and leg.has_hold:
@@ -368,12 +520,13 @@ func _update_gait() -> void:
 
 	for leg in _legs:
 		# A swinging foot keeps its foothold, or it would chase it forever.
-		if leg.planted or not leg.has_hold or not _in_reach(leg, leg.hold, HOLD_REACH):
+		if leg.planted or not leg.has_hold \
+				or not _in_reach(leg, leg.hold, HOLD_REACH, leg.hold_foothold != null):
 			leg.has_hold = _find_hold(leg, lead)
 		if not _initialized:
 			leg.planted = leg.has_hold
 			if leg.planted:
-				_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider)
+				_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider, leg.hold_foothold)
 			continue
 		if not leg.planted or not leg.has_hold:
 			continue
@@ -386,7 +539,8 @@ func _update_gait() -> void:
 
 
 ## Raycasts in the body's frame from hip height out above the foot's home spot,
-## then down. Rising ground, or a wall being walked into, is reached along.
+## then down. Rising ground, or a wall being walked into, is reached along. A
+## foothold near the home spot wins over what the rays find.
 func _find_hold(leg: Leg, lead: Vector3) -> bool:
 	var pose := global_basis.orthonormalized()
 	var up := pose.y
@@ -395,49 +549,109 @@ func _find_hold(leg: Leg, lead: Vector3) -> bool:
 			+ up * (leg.hip_local.y - leg.rest_local.y)
 	var obstacle := _ray(from, above)
 	var hit := {}
-	if obstacle.is_empty():
+	if obstacle.is_empty() or obstacle.normal.y <= WALL_NORMAL_Y:
+		hit = _step_up(leg, from, above)
+		if not hit.is_empty() and not _in_reach(leg, hit.position, HOLD_REACH):
+			hit = {}
+	if not hit.is_empty():
+		pass
+	elif obstacle.is_empty():
 		hit = _ray(above, above - up * _leg_reach(leg))
-	elif obstacle.normal.y > WALL_NORMAL_Y or _pushing_into(obstacle.normal):
+	elif obstacle.normal.y > WALL_NORMAL_Y or (climb_rate > 0.0 and _pushing_into(obstacle.normal)):
 		hit = _reach_along(obstacle, above)
 	else:
-		var base: Vector3 = obstacle.position + obstacle.normal * 0.02
+		var base: Vector3 = obstacle.position + obstacle.normal * 0.02 * _size
 		hit = _ray(base, base - up * _leg_reach(leg))
 	if not obstacle.is_empty() and obstacle.normal.y <= WALL_NORMAL_Y:
 		_walls_seen += obstacle.normal
 	if (hit.is_empty() or not _in_reach(leg, hit.position, HOLD_REACH)) and not obstacle.is_empty():
 		hit = obstacle
-	if hit.is_empty() or not _in_reach(leg, hit.position, HOLD_REACH):
+	if not hit.is_empty() and not _in_reach(leg, hit.position, HOLD_REACH):
+		hit = {}
+	var home := global_position + pose * leg.rest_local + lead
+	var foothold := _pick_foothold(leg, home, hit.get("collider"))
+	if foothold:
+		_set_hold(leg, foothold.global_position, foothold.get_normal(), foothold.get_body(), foothold)
+		return true
+	if hit.is_empty():
+		_hold_foothold(leg, null)
 		return false
-	leg.hold = hit.position
-	leg.hold_normal = hit.normal
-	leg.hold_collider = hit.collider
+	_set_hold(leg, hit.position, hit.normal, hit.collider)
 	return true
+
+
+## The free foothold nearest the home spot, within its capture radius and the
+## leg's reach. It must be on what the rays found, on what the belly or a foot
+## is on, or the rays found nothing: footholds guide feet onto geometry the
+## crab is on, they don't pull it off the ground onto a neighbour.
+func _pick_foothold(leg: Leg, home: Vector3, found: Object) -> Foothold:
+	var best: Foothold = null
+	var best_dist := INF
+	for node in get_tree().get_nodes_in_group(Foothold.GROUP):
+		var foothold := node as Foothold
+		var body := foothold.get_body() if foothold else null
+		if not body or body == self or not foothold.is_free_for(leg):
+			continue
+		var radius := foothold.get_capture_radius()
+		if foothold == leg.hold_foothold:
+			radius *= FOOTHOLD_KEEP
+		var dist := foothold.global_position.distance_to(home)
+		if dist >= minf(radius, best_dist):
+			continue
+		if found and body != found and body != _under and not _standing_on(body):
+			continue
+		if not _in_reach(leg, foothold.global_position, HOLD_REACH, true):
+			continue
+		best = foothold
+		best_dist = dist
+	return best
+
+
+func _standing_on(body: Object) -> bool:
+	for leg in _legs:
+		if leg.planted and leg.collider == body:
+			return true
+	return false
+
+
+## Looks down from above hip height, so a foot can stand on top of something
+## a little higher than the hips, such as another crab or a low wall.
+func _step_up(leg: Leg, from: Vector3, above: Vector3) -> Dictionary:
+	var up := global_basis.orthonormalized().y
+	var lift := up * _leg_reach(leg) * STEP_UP_RAISE
+	if not _ray(from, from + lift).is_empty() or not _ray(from + lift, above + lift).is_empty():
+		return {}
+	var hit := _ray(above + lift, above - up * _leg_reach(leg))
+	if hit.is_empty() or hit.normal.dot(up) <= WALL_NORMAL_Y:
+		return {}
+	return hit
 
 
 func _reach_along(surface: Dictionary, goal: Vector3) -> Dictionary:
 	var n: Vector3 = surface.normal
-	var start: Vector3 = surface.position + n * 0.01
+	var lift := STEP_HEIGHT * _size
+	var start: Vector3 = surface.position + n * 0.01 * _size
 	var along: Vector3 = goal - surface.position
 	along -= n * along.dot(n)
-	var over: Vector3 = start + along + n * step_height
-	if not _ray(start, start + n * step_height).is_empty() \
-			or not _ray(start + n * step_height, over).is_empty():
+	var over: Vector3 = start + along + n * lift
+	if not _ray(start, start + n * lift).is_empty() \
+			or not _ray(start + n * lift, over).is_empty():
 		return {}
-	return _ray(over, over - n * step_height * 3.0)
+	return _ray(over, over - n * lift * 3.0)
 
 
 func _scatter_hold(leg: Leg) -> void:
+	if leg.hold_foothold:
+		return
 	var n := leg.hold_normal
 	var tangent := n.cross(Vector3.RIGHT if absf(n.x) < 0.9 else Vector3.FORWARD).normalized()
-	var offset := tangent.rotated(n, randf() * TAU) * randf() * foot_placement_jitter
-	var lifted := leg.hold + n * 0.02
+	var offset := tangent.rotated(n, randf() * TAU) * randf() * _step_threshold * JITTER_FRACTION
+	var lifted := leg.hold + n * 0.02 * _size
 	if not _ray(lifted, lifted + offset).is_empty():
 		return
-	var hit := _ray(lifted + offset, lifted + offset - n * 0.05)
+	var hit := _ray(lifted + offset, lifted + offset - n * 0.05 * _size)
 	if not hit.is_empty():
-		leg.hold = hit.position
-		leg.hold_normal = hit.normal
-		leg.hold_collider = hit.collider
+		_set_hold(leg, hit.position, hit.normal, hit.collider)
 
 
 func _move_free_foot(leg: Leg, delta: float) -> void:
@@ -451,52 +665,139 @@ func _move_free_foot(leg: Leg, delta: float) -> void:
 	var stepping := leg.has_hold and not _airborne
 	if stepping:
 		# Arc over, then strike slightly into the surface.
+		var step_height := STEP_HEIGHT * _size
 		var to_foot := leg.foot.pos - leg.hold
 		var across := (to_foot - leg.hold_normal * to_foot.dot(leg.hold_normal)).length()
 		var lift_dir := (global_basis.y + leg.hold_normal).normalized()
 		target = leg.hold + lift_dir * minf(across, step_height) - leg.hold_normal * step_height * 0.5
-		_spring_point(leg.foot, target, Vector3.ZERO, swing_stiffness, 2.0 * sqrt(swing_stiffness),
-				Vector3.ZERO, delta)
+		_spring_point(leg.foot, target, _surface_velocity(leg.hold_collider, leg.hold),
+				SWING_STIFFNESS, 2.0 * sqrt(SWING_STIFFNESS), Vector3.ZERO, delta)
 	else:
+		var ride_height := RIDE_HEIGHT * _size
 		var pose := leg.rest_local + Vector3.UP * ride_height * 0.4
 		if _righting:
-			pose += Vector3.UP * sin(_time * 22.0 + leg.hip_local.z * 60.0) * ride_height
+			pose += Vector3.UP * sin(_time * 22.0 + leg.hip_local.z / _size * 60.0) * ride_height
 		target = to_global(pose)
 		var target_vel := linear_velocity + angular_velocity.cross(target - global_position)
-		_spring_point(leg.foot, target, target_vel, limp_stiffness, limp_damping,
+		_spring_point(leg.foot, target, target_vel, LIMP_STIFFNESS, LIMP_DAMPING,
 				get_gravity(), delta)
 
 	var reach := _leg_reach(leg)
 	_tether(leg.foot, hip, hip_vel, reach * MIN_REACH, reach * MAX_REACH)
-	var hit := _collide(leg.foot, from, FOOT_RADIUS)
-	if stepping and leg.foot.pos.distance_to(leg.hold) < 0.01:
-		_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider)
+	var hit := _collide(leg.foot, from, FOOT_RADIUS * _size)
+	var arrived := leg.foot.pos.distance_to(leg.hold) < 0.01 * _size
+	# Striking the surface by a foothold counts as standing on the foothold.
+	if stepping and leg.hold_foothold and not hit.is_empty():
+		arrived = arrived or hit.position.distance_to(leg.hold) < 0.03 * _size
+	if stepping and arrived:
+		_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider, leg.hold_foothold)
 	elif not hit.is_empty() and _in_reach(leg, hit.position, HOLD_REACH):
 		_plant(leg, hit.position, hit.normal, hit.collider)
 
 
-func _plant(leg: Leg, at: Vector3, normal: Vector3, collider: Object) -> void:
+func _plant(leg: Leg, at: Vector3, normal: Vector3, collider: Object,
+		foothold: Foothold = null) -> void:
 	leg.planted = true
+	leg.foothold = foothold
 	# Off the surface, so later rays from here still see it.
-	leg.foot.pos = at + normal * FOOT_RADIUS
+	leg.foot.pos = at + normal * FOOT_RADIUS * _size
 	leg.foot.vel = Vector3.ZERO
 	leg.normal = normal
 	leg.collider = collider
+	var body := _surface(collider)
+	if body:
+		leg.foot_local = body.global_transform.affine_inverse() * leg.foot.pos
+		leg.normal_local = body.global_basis.orthonormalized().inverse() * normal
+
+
+func _set_hold(leg: Leg, at: Vector3, normal: Vector3, collider: Object,
+		foothold: Foothold = null) -> void:
+	_hold_foothold(leg, foothold)
+	leg.hold = at
+	leg.hold_normal = normal
+	leg.hold_collider = collider
+	var body := _surface(collider)
+	if body:
+		leg.hold_local = body.global_transform.affine_inverse() * at
+		leg.hold_normal_local = body.global_basis.orthonormalized().inverse() * normal
+
+
+func _hold_foothold(leg: Leg, foothold: Foothold) -> void:
+	if leg.hold_foothold == foothold:
+		return
+	if is_instance_valid(leg.hold_foothold):
+		leg.hold_foothold.release(leg)
+	if foothold:
+		foothold.claim(leg, self)
+	leg.hold_foothold = foothold
+
+
+## Moves planted feet and footholds along with whatever they're on, which may
+## be another crab. Lets go of anything that has been freed.
+func _follow_surfaces() -> void:
+	for leg in _legs:
+		if leg.planted:
+			var body := _surface(leg.collider)
+			if body:
+				leg.foot.pos = body.global_transform * leg.foot_local
+				leg.normal = (body.global_basis.orthonormalized() * leg.normal_local).normalized()
+			else:
+				leg.planted = false
+		if leg.has_hold:
+			var body := _surface(leg.hold_collider)
+			if body:
+				leg.hold = body.global_transform * leg.hold_local
+				leg.hold_normal = (body.global_basis.orthonormalized() * leg.hold_normal_local).normalized()
+			else:
+				leg.has_hold = false
+				_hold_foothold(leg, null)
+
+
+func _surface(collider: Object) -> Node3D:
+	if is_instance_valid(collider) and collider is Node3D:
+		return collider
+	return null
+
+
+## Velocity of a surface at a point; zero unless it's a rigid body.
+func _surface_velocity(collider: Object, point: Vector3) -> Vector3:
+	if is_instance_valid(collider) and collider is RigidBody3D:
+		var body: RigidBody3D = collider
+		return body.linear_velocity + body.angular_velocity.cross(point - body.global_position)
+	return Vector3.ZERO
+
+
+## Average velocity of the surfaces under the planted feet.
+func _ground_velocity() -> Vector3:
+	var sum := Vector3.ZERO
+	var count := 0
+	for leg in _legs:
+		if leg.planted:
+			sum += _surface_velocity(leg.collider, leg.foot.pos)
+			count += 1
+	return sum / count if count > 0 else Vector3.ZERO
 
 
 ## Between folded and stretched, on the leg's own side, not far above the hip.
-func _in_reach(leg: Leg, point: Vector3, max_fraction: float) -> bool:
+## A foothold may be nearer and further in.
+func _in_reach(leg: Leg, point: Vector3, max_fraction: float, foothold := false) -> bool:
 	var to_point := point - to_global(leg.hip_local)
 	var dist := to_point.length()
 	var reach := _leg_reach(leg)
-	return dist > reach * MIN_REACH and dist < reach * max_fraction \
+	var min_reach := FOOTHOLD_MIN_REACH if foothold else MIN_REACH
+	var min_spread := -FOOTHOLD_INWARD if foothold else MIN_SPREAD
+	return dist > reach * min_reach and dist < reach * max_fraction \
 			and to_point.dot(global_basis.y) < dist * MAX_RAISE \
-			and to_point.dot(global_basis * leg.out_local) > reach * MIN_SPREAD
+			and to_point.dot(global_basis * leg.out_local) > reach * min_spread
 
 
 func _leg_reach(leg: Leg) -> float:
-	return (segment_lengths.x + segment_lengths.y + segment_lengths.z) * leg.length_scale
+	return _leg_reach_full() * leg.length_scale
 
+
+## Reach of a full-length leg (length scale 1).
+func _leg_reach_full() -> float:
+	return _segment_lengths.x + _segment_lengths.y + _segment_lengths.z
 
 # --- Points on tethers ----------------------------------------------------------
 
@@ -545,30 +846,41 @@ func _apply_self_right(delta: float) -> void:
 	var up := global_basis.y
 	var held_up := _support > get_gravity().length() * mass * 0.3 and up.y > -0.2
 	_stuck_time = _stuck_time + delta if up.y < 0.3 and not held_up else 0.0
-	_righting = self_right_torque > 0.0 and _stuck_time > SELF_RIGHT_DELAY
+	_righting = can_self_right and _stuck_time > SELF_RIGHT_DELAY
 	if not _righting:
 		return
 	var axis := up.cross(Vector3.UP)
 	if axis.length_squared() < 0.01:
 		axis = global_basis.z
-	apply_torque(axis.normalized() * self_right_torque - angular_velocity * self_right_torque * 0.3)
+	var k := _torque_scale()
+	apply_torque(axis.normalized() * SELF_RIGHT_TORQUE * k.x
+			- angular_velocity * SELF_RIGHT_DAMPING * k.y)
 
 
 func _apply_wall_roll() -> void:
-	if _wall_roll <= 0.0 or wall_roll_torque <= 0.0 or _righting:
+	if _wall_roll <= 0.0 or _righting:
 		return
 	var axis := global_basis.y.cross(_target_basis.y)
 	var angle := global_basis.y.angle_to(_target_basis.y)
 	if axis.length_squared() > 1e-8:
 		axis = axis.normalized() * angle
-	apply_torque(axis * wall_roll_torque - angular_velocity * wall_roll_torque * 0.1)
+	var k := _torque_scale()
+	apply_torque(axis * WALL_ROLL_TORQUE * k.x - angular_velocity * WALL_ROLL_DAMPING * k.y)
+
+
+## The body's weight on a lever its own size (x), and the damping (y) that
+## goes with it, so recovery behaves alike at any mass and size.
+func _torque_scale() -> Vector2:
+	var g := get_gravity().length()
+	var torque := mass * g * _size
+	return Vector2(torque, torque * sqrt(_size / maxf(g, 0.01)))
 
 
 # --- Visuals ----------------------------------------------------------------------
 
 func _pose_leg(leg: Leg) -> void:
 	var up := global_basis.y
-	var lengths := segment_lengths * leg.length_scale
+	var lengths := _segment_lengths * leg.length_scale
 	var hip := to_global(leg.hip_local)
 	var foot := leg.foot.pos
 
@@ -579,7 +891,7 @@ func _pose_leg(leg: Leg) -> void:
 	# Dactyl stands out from the surface, leaning in toward the body.
 	var normal := leg.normal if leg.planted else up
 	var inward := -(outward - normal * outward.dot(normal))
-	var tilt := deg_to_rad(dactyl_tilt_deg)
+	var tilt := deg_to_rad(DACTYL_TILT_DEG)
 	var dactyl := normal * cos(tilt)
 	if inward.length_squared() > 1e-6:
 		dactyl += inward.normalized() * sin(tilt)
