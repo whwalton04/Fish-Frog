@@ -58,49 +58,73 @@ mesh = SubResource("SphereMesh_eye")
 [node name="Footholds" type="Node3D" parent="."]
 
 [node name="FrontR" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.086, 0.025, -0.083)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.115, 0.015, -0.077)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0
 
 [node name="FrontMidR" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.129, 0.025, -0.028)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.146, 0.015, -0.029)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0
 
 [node name="BackMidR" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.129, 0.025, 0.028)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.147, 0.015, 0.025)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0
 
 [node name="BackR" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.086, 0.025, 0.083)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.122, 0.015, 0.070)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0
 
 [node name="FrontL" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.086, 0.025, -0.083)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.115, 0.015, -0.077)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0
 
 [node name="FrontMidL" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.129, 0.025, -0.028)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.146, 0.015, -0.029)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0
 
 [node name="BackMidL" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.129, 0.025, 0.028)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.147, 0.015, 0.025)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0
 
 [node name="BackL" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.086, 0.025, 0.083)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.122, 0.015, 0.070)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 capture_radius = 0.3
+lift = 0.03
+speed_scale = 0.3
+grip = 2.0

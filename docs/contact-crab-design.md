@@ -116,8 +116,37 @@ the friction cone. Rim footholds pointing up let it straddle the shell. Their
 reach rules are looser (down to 0.15 × reach from the hip, slightly inward),
 so a crab lying on a shell can put its feet down. They also don't pull the body
 along the leg: only their height and sideways offset feed the body fit. As the
-feet take hold the body rises, from 0.10 m to 0.16 m above the lower crab's
-centre, and the legs straighten (`tests/stand_test.gd`).
+feet take hold the body rises and the legs straighten.
+
+A foothold can also change how the crab stands while a foot is on it: `lift`
+raises the body, `speed_scale` caps its speed over that body (from when a foot
+reaches for the foothold, so it slows as it climbs on), `grip` replaces the
+crab's friction for that foot, and `foot_planted` / `foot_lifted` signals let
+anything else react. Crab shells use lift 0.03, speed 0.3 and grip 2, which
+leaves about 0.1 m between the shells.
+
+#### Riding
+
+A crab whose belly is over a body and has a foot on one of that body's
+footholds is riding it. Riding changes three things. Only the feet on the
+carrier's footholds set the body's height, so feet left on the ground get
+stretched and step up instead of holding the body down on the shell. With no
+input, those feet count as standing under their hips, which centres the rider
+between them. And the rider's facing turns with the carrier. The rims carry
+footholds under where a centred rider's hips are. Feet stay on their foothold
+while it still qualifies, rather than stepping to a neighbour that has come
+slightly nearer.
+
+A rider's feet are nearly under its hips, which the leg drawing didn't expect:
+the direction to the foot was too short to trust and up ran along the leg, so
+knees flicked about and folded under the body. The drawing now eases from the
+direction to the foot toward the leg's own outward direction as the foot comes
+in, bends the knee up and out, and leans the dactyl outward under the hip so
+the knee has room. Feet standing out from the hip are drawn as before.
+
+`tests/stand_test.gd` drops a crab on another, walks one onto another from
+behind and from the side at half and full speed, rides a carrier through
+turns, and walks across another crab.
 
 ## Walls: lean away, then flip
 

@@ -7,6 +7,12 @@ extends Marker3D
 ## long as it's already on, or reaching for, the body this belongs to (the
 ## nearest CollisionObject3D above it). The foot pushes along this node's +Y,
 ## whatever the surface under it faces, so a foothold on a rim can be stood on.
+##
+## While a foot stands here it can also change how the animal stands, below,
+## and the signals let anything else react.
+
+signal foot_planted(animal: Node)
+signal foot_lifted(animal: Node)
 
 const GROUP := &"footholds"
 
@@ -15,6 +21,17 @@ const GROUP := &"footholds"
 @export_range(0.01, 1.0, 0.01) var capture_radius := 0.15
 ## How many feet can stand here at once.
 @export_range(1, 8) var capacity := 1
+
+@export_group("While stood on")
+## Raises the animal's body this much (m, scaled with the node), averaged over
+## its feet here.
+@export_range(0.0, 0.3, 0.005) var lift := 0.0
+## Caps the animal's speed over this body, × its full speed. The lowest of its
+## feet's counts.
+@export_range(0.0, 1.0, 0.01) var speed_scale := 1.0
+## Friction for a foot here, in place of the animal's own grip; 0 keeps that.
+## High values hold like a hook.
+@export_range(0.0, 10.0, 0.05) var grip := 0.0
 
 var _users := {}  # foot -> animal it belongs to
 
@@ -36,6 +53,10 @@ func get_normal() -> Vector3:
 
 func get_capture_radius() -> float:
 	return capture_radius * global_basis.get_scale().x
+
+
+func get_lift() -> float:
+	return lift * global_basis.get_scale().x
 
 
 func is_free_for(foot: Object) -> bool:

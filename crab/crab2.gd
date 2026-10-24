@@ -53,6 +53,12 @@ const FOOT_RADIUS := 0.002
 # Merus, carpus+propodus, dactyl.
 const SEGMENT_LENGTHS := Vector3(0.14, 0.133, 0.08)
 const DACTYL_TILT_DEG := 20.0
+const STRADDLE_TILT_DEG := 45.0  # leaning out, with the foot under the hip
+## How far out, × reach, a foot must stand before the leg reaches toward it
+## rather than along its own direction.
+const OUTWARD_SPREAD := 0.3
+## How much the knee leans out as well as up.
+const KNEE_OUTWARD := 0.5
 
 # Legs
 const LATERAL_STIFFNESS := 0.27  # × vertical stiffness
@@ -86,7 +92,7 @@ const MAX_REACH := 0.98
 ## A foot on a foothold may stand this far inward of its hip and this close to
 ## it, × reach, so it can straddle something narrower than its stance from
 ## lying on it, rising as the feet take hold.
-const FOOTHOLD_INWARD := 0.1
+const FOOTHOLD_INWARD := 0.2
 const FOOTHOLD_MIN_REACH := 0.15
 ## A held foothold is kept until the foot's usual spot is this many capture
 ## radii away, so the foot doesn't flick between it and the ground.
@@ -125,6 +131,7 @@ class Leg:
 	var hold_normal_local: Vector3
 	var hold_foothold: Foothold
 	var foothold: Foothold  # the one the planted foot is on
+	var stood_on: Foothold  # as last told to the foothold
 	var segments: Array[MeshInstance3D] = []
 	var joints: Array[MeshInstance3D] = []
 
@@ -157,6 +164,7 @@ var _air_time := 0.0
 var _airborne := false
 var _righting := false
 var _under: Object  # what's right under the belly, if anything
+var _carrier: Object  # what the crab is riding: under it, its feet on its footholds
 var _time := 0.0
 
 
@@ -251,7 +259,7 @@ func _add_visual(mesh: Mesh) -> MeshInstance3D:
 func _physics_process(delta: float) -> void:
 	_time += delta
 	_update_tuning()
-	_wish = _get_wish_velocity()
+	_wish = _get_wish_velocity().limit_length(move_speed * _foothold_speed_scale())
 	_follow_surfaces()
 	_update_target_basis(delta)
 	_update_gait()
@@ -270,6 +278,7 @@ func _physics_process(delta: float) -> void:
 
 	_apply_self_right(delta)
 	_apply_wall_roll()
+	_tell_footholds()
 
 
 func _process(_delta: float) -> void:
@@ -307,6 +316,12 @@ func _update_target_basis(delta: float) -> void:
 				wall_sum += leg.normal
 	var forward := -_target_basis.z
 	forward = Vector3(forward.x, 0.0, forward.z).normalized()
+	# A rider turns with what it rides, until told to face elsewhere.
+	if _carrier is RigidBody3D:
+		var spin: float = (_carrier as RigidBody3D).angular_velocity.y * delta
+		forward = forward.rotated(Vector3.UP, spin)
+		_desired_facing = _desired_facing.rotated(Vector3.UP, spin)
+		facing_direction = facing_direction.rotated(Vector3.UP, spin)
 	var turn := forward.signed_angle_to(_desired_facing, Vector3.UP)
 	forward = forward.rotated(Vector3.UP, clampf(turn, -turn_rate * delta, turn_rate * delta))
 
@@ -416,7 +431,8 @@ func _push_with_leg(leg: Leg) -> void:
 	var force := lift * _leg_stiffness + (error - lift) * _leg_stiffness * LATERAL_STIFFNESS \
 			+ (drive - hip_vel) * _leg_damping \
 			- get_gravity() * mass / _legs.size()
-	force = _friction_cone(force, leg.normal).limit_length(_leg_max_force)
+	var leg_grip := leg.foothold.grip if leg.foothold and leg.foothold.grip > 0.0 else grip
+	force = _friction_cone(force, leg.normal, leg_grip).limit_length(_leg_max_force)
 	if force == Vector3.ZERO:
 		if _airborne and hip.distance_to(leg.foot.pos) > (leg.rest_local - leg.hip_local).length():
 			leg.planted = false
@@ -460,7 +476,9 @@ func _belly_lift() -> float:
 
 
 ## Average body centre implied by each planted foot's rest spot. Wall feet
-## count only when no foot is on the ground.
+## count only when no foot is on the ground. Riding, only feet on the
+## carrier's footholds count, so feet left on the ground don't hold the body
+## down on it; they're stretched until they step up too.
 func _fit_body_center() -> Vector3:
 	var ground := Vector3.ZERO
 	var ground_count := 0
@@ -468,6 +486,8 @@ func _fit_body_center() -> Vector3:
 	var wall_count := 0
 	for leg in _legs:
 		if not leg.planted:
+			continue
+		if _carrier and not (leg.foothold and leg.foothold.get_body() == _carrier):
 			continue
 		var center := leg.foot.pos - _target_basis * _fit_rest(leg)
 		if leg.normal.y > WALL_NORMAL_Y:
@@ -482,26 +502,30 @@ func _fit_body_center() -> Vector3:
 
 
 ## The foot's rest spot, or for a foot on a foothold, the spot along the leg's
-## outward line level with it: a foothold may sit anywhere from under the hip
-## to full stretch, and only its height and sideways offset place the body.
+## outward line level with it, raised by the foothold's lift: a foothold may
+## sit anywhere from under the hip to full stretch, and only its height and
+## sideways offset place the body. Riding and not walking, it's under the
+## hip, so the rider settles to straddle the carrier, centred between its feet.
 func _fit_rest(leg: Leg) -> Vector3:
 	if not leg.foothold:
 		return leg.rest_local
-	var local := _target_basis.inverse() * (leg.foot.pos - global_position)
-	var full := Vector2(leg.rest_local.x - leg.hip_local.x, leg.rest_local.z - leg.hip_local.z).length()
-	var along := clampf((local - leg.hip_local).dot(leg.out_local), 0.0, full)
+	var along := 0.0
+	if not (_carrier and leg.foothold.get_body() == _carrier and _wish.length_squared() < 0.01):
+		var local := _target_basis.inverse() * (leg.foot.pos - global_position)
+		var full := Vector2(leg.rest_local.x - leg.hip_local.x, leg.rest_local.z - leg.hip_local.z).length()
+		along = clampf((local - leg.hip_local).dot(leg.out_local), 0.0, full)
 	var rest := leg.hip_local + leg.out_local * along
-	rest.y = leg.rest_local.y
+	rest.y = leg.rest_local.y - leg.foothold.get_lift()
 	return rest
 
 
 ## Push only, never pull; sideways force at most friction times push.
-func _friction_cone(force: Vector3, normal: Vector3) -> Vector3:
+func _friction_cone(force: Vector3, normal: Vector3, friction: float) -> Vector3:
 	var push := force.dot(normal)
 	if push <= 0.0:
 		return Vector3.ZERO
 	var slide := force - normal * push
-	return normal * push + slide.limit_length(grip * push)
+	return normal * push + slide.limit_length(friction * push)
 
 
 func _update_gait() -> void:
@@ -511,8 +535,12 @@ func _update_gait() -> void:
 	var lead := (flat_vel * LEAD_TIME).limit_length(_step_threshold * 0.5)
 	var moving := flat_vel.length() > 0.1 * _size or absf(angular_velocity.y) > 0.4
 	var threshold := _step_threshold if moving else _step_threshold * SETTLE_FRACTION
-	var belly := _ray(global_position, global_position - global_basis.y * RIDE_HEIGHT * 0.8 * _size)
+	var belly := _ray(global_position, global_position - global_basis.y * RIDE_HEIGHT * 2.5 * _size)
 	_under = belly.get("collider")
+	_carrier = null
+	for leg in _legs:
+		if leg.planted and leg.foothold and _under and leg.foothold.get_body() == _under:
+			_carrier = _under
 	var swinging := [false, false]
 	for leg in _legs:
 		if not leg.planted and leg.has_hold:
@@ -581,9 +609,10 @@ func _find_hold(leg: Leg, lead: Vector3) -> bool:
 
 
 ## The free foothold nearest the home spot, within its capture radius and the
-## leg's reach. It must be on what the rays found, on what the belly or a foot
-## is on, or the rays found nothing: footholds guide feet onto geometry the
-## crab is on, they don't pull it off the ground onto a neighbour.
+## leg's reach, or the one already held while it still qualifies. It must be
+## on what the rays found, on what the belly or a foot is on, or the rays found
+## nothing: footholds guide feet onto geometry the crab is on, they don't pull
+## it off the ground onto a neighbour.
 func _pick_foothold(leg: Leg, home: Vector3, found: Object) -> Foothold:
 	var best: Foothold = null
 	var best_dist := INF
@@ -602,9 +631,38 @@ func _pick_foothold(leg: Leg, home: Vector3, found: Object) -> Foothold:
 			continue
 		if not _in_reach(leg, foothold.global_position, HOLD_REACH, true):
 			continue
+		# Stays on the one it has while it can, rather than stepping across to
+		# a neighbour that has come slightly nearer.
+		if foothold == leg.hold_foothold:
+			return foothold
 		best = foothold
 		best_dist = dist
 	return best
+
+
+## The lowest speed scale of the footholds the feet stand on or are reaching
+## for, so a crab slows as it steps onto them rather than once it's there.
+func _foothold_speed_scale() -> float:
+	var lowest := 1.0
+	for leg in _legs:
+		if leg.planted and leg.foothold:
+			lowest = minf(lowest, leg.foothold.speed_scale)
+		if leg.has_hold and is_instance_valid(leg.hold_foothold):
+			lowest = minf(lowest, leg.hold_foothold.speed_scale)
+	return lowest
+
+
+## Tells footholds when a foot starts or stops standing on them.
+func _tell_footholds() -> void:
+	for leg in _legs:
+		var on := leg.foothold if leg.planted and is_instance_valid(leg.foothold) else null
+		if on == leg.stood_on:
+			continue
+		if is_instance_valid(leg.stood_on):
+			leg.stood_on.foot_lifted.emit(self)
+		if on:
+			on.foot_planted.emit(self)
+		leg.stood_on = on
 
 
 func _standing_on(body: Object) -> bool:
@@ -683,7 +741,8 @@ func _move_free_foot(leg: Leg, delta: float) -> void:
 				get_gravity(), delta)
 
 	var reach := _leg_reach(leg)
-	_tether(leg.foot, hip, hip_vel, reach * MIN_REACH, reach * MAX_REACH)
+	var min_reach := FOOTHOLD_MIN_REACH if stepping and leg.hold_foothold else MIN_REACH
+	_tether(leg.foot, hip, hip_vel, reach * min_reach, reach * MAX_REACH)
 	var hit := _collide(leg.foot, from, FOOT_RADIUS * _size)
 	var arrived := leg.foot.pos.distance_to(leg.hold) < 0.01 * _size
 	# Striking the surface by a foothold counts as standing on the foothold.
@@ -884,26 +943,38 @@ func _pose_leg(leg: Leg) -> void:
 	var hip := to_global(leg.hip_local)
 	var foot := leg.foot.pos
 
-	var outward := foot - hip
-	outward -= up * outward.dot(up)
-	outward = outward.normalized() if outward.length_squared() > 1e-6 else global_basis * leg.out_local
+	# Which way the leg reaches: toward the foot when it stands well out on its
+	# own side, easing to the leg's own direction as the foot comes in under the
+	# hip, where the direction to the foot is short and unsteady.
+	var side := (global_basis * leg.out_local).normalized()
+	var to_foot := foot - hip
+	to_foot -= up * to_foot.dot(up)
+	var spread := smoothstep(0.0, OUTWARD_SPREAD * _leg_reach(leg), to_foot.dot(side))
+	var outward := side
+	if to_foot.length_squared() > 1e-6:
+		outward = side.slerp(to_foot.normalized(), spread) if to_foot.normalized().dot(side) > -0.99 else side
 
-	# Dactyl stands out from the surface, leaning in toward the body.
+	# Dactyl stands out from the surface, leaning in toward the body. Under
+	# the hip it leans out instead, so the knee has room to arch over.
 	var normal := leg.normal if leg.planted else up
-	var inward := -(outward - normal * outward.dot(normal))
-	var tilt := deg_to_rad(DACTYL_TILT_DEG)
+	var lean := -outward * (spread * 2.0 - 1.0)
+	lean -= normal * lean.dot(normal)
+	var tilt := deg_to_rad(lerpf(STRADDLE_TILT_DEG, DACTYL_TILT_DEG, spread))
 	var dactyl := normal * cos(tilt)
-	if inward.length_squared() > 1e-6:
-		dactyl += inward.normalized() * sin(tilt)
+	if lean.length_squared() > 1e-6:
+		dactyl += lean.normalized() * sin(tilt)
 	var ankle := foot + dactyl * lengths.z
 
-	# Two-bone IK hip -> ankle, knee bent upward.
+	# Two-bone IK hip -> ankle, knee bent up and out. With the foot out from
+	# the hip that's straight up; with it underneath, up alone is along the
+	# leg and the outward part keeps the knee arched over its own side.
 	var to_ankle := ankle - hip
 	var dist := to_ankle.length()
 	var dir := to_ankle / dist if dist > 1e-5 else outward
 	var reach := clampf(dist, absf(lengths.x - lengths.y) + 1e-3, lengths.x + lengths.y - 1e-3)
-	var pole := up - dir * up.dot(dir)
-	pole = pole.normalized() if pole.length_squared() > 1e-6 else outward
+	var bend := up + outward * KNEE_OUTWARD
+	var pole := bend - dir * bend.dot(dir)
+	pole = pole.normalized() if pole.length_squared() > 1e-6 else up
 	var along := (lengths.x * lengths.x - lengths.y * lengths.y + reach * reach) / (2.0 * reach)
 	var rise := sqrt(maxf(lengths.x * lengths.x - along * along, 0.0))
 	var knee := hip + dir * along + pole * rise
