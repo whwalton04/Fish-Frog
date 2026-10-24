@@ -1,0 +1,127 @@
+[gd_scene format=3 uid="uid://fkfkcj78lncp"]
+
+[ext_resource type="PackedScene" uid="uid://jwj4qengayw3" path="res://crab/crab2.tscn" id="1_crab"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="2_player"]
+[ext_resource type="Texture2D" uid="uid://cyvkjvxhfv7rv" path="res://world/textures/sand_albedo.png" id="3_sand"]
+[ext_resource type="Script" path="res://world/water.gd" id="4_water"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+
+[sub_resource type="Sky" id="Sky_sky"]
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="Environment" id="Environment_env"]
+background_mode = 2
+sky = SubResource("Sky_sky")
+ambient_light_source = 3
+tonemap_mode = 2
+
+[sub_resource type="Gradient" id="Gradient_hyim0"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_4f7fj"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_spvjk"]
+noise = SubResource("FastNoiseLite_4f7fj")
+color_ramp = SubResource("Gradient_hyim0")
+seamless = true
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_cmo1i"]
+_shader_parameters = {
+&"bias_distance": null,
+&"blend_sharpness": null,
+&"depth_blur": null,
+&"enable_macro_variation": null,
+&"enable_projection": null,
+&"flat_terrain_normals": null,
+&"macro_variation1": null,
+&"macro_variation2": null,
+&"macro_variation_slope": null,
+&"mipmap_bias": null,
+&"noise1_angle": null,
+&"noise1_offset": null,
+&"noise1_scale": null,
+&"noise2_scale": null,
+&"noise_texture": SubResource("NoiseTexture2D_spvjk"),
+&"projection_threshold": null
+}
+world_background = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_i1eo7"]
+transparency = 4
+cull_mode = 2
+vertex_color_use_as_albedo = true
+backlight_enabled = true
+backlight = Color(0.5, 0.5, 0.5, 1)
+distance_fade_mode = 1
+distance_fade_min_distance = 128.0
+distance_fade_max_distance = 96.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_gu74f"]
+generated_type = 1
+height_offset = 0.5
+material_override = SubResource("StandardMaterial3D_i1eo7")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 128.0
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_sand"]
+name = "Sand"
+albedo_texture = ExtResource("3_sand")
+uv_scale = 0.2
+
+[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_04q08"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_gu74f")])
+texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_sand")])
+
+[node name="Main" type="Node3D" unique_id=159610304]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=175412984]
+environment = SubResource("Environment_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1818361855]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 10, 0)
+shadow_enabled = true
+
+[node name="Terrain3D" type="Terrain3D" parent="." unique_id=1304403813]
+data_directory = "res://world/terrain_data"
+material = SubResource("Terrain3DMaterial_cmo1i")
+assets = SubResource("Terrain3DAssets_04q08")
+collision_mode = 3
+top_level = true
+metadata/_edit_lock_ = true
+
+[node name="Water" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+script = ExtResource("4_water")
+
+[node name="Player" parent="." unique_id=738606376 instance=ExtResource("2_player")]
+
+[node name="Crab1" parent="Player" unique_id=1988744409 instance=ExtResource("1_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.15, 0)
+
+[node name="Crab2" parent="." unique_id=1660422765 instance=ExtResource("1_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 2.15, 3)
+
+[node name="Crab3" parent="." unique_id=1367847826 instance=ExtResource("1_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 2.15, 3)
+
+[node name="Crab4" parent="." unique_id=1905348186 instance=ExtResource("1_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.15, 7)
+
+[node name="Crab5" parent="." unique_id=234714607 instance=ExtResource("1_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 2.15, -2)
+
+[node name="Crab6" parent="." unique_id=123258251 instance=ExtResource("1_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2.15, 7)
