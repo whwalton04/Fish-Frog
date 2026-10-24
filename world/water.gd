@@ -32,14 +32,24 @@ extends Node3D
 @export_flags_3d_physics var body_mask := 3
 
 @export_group("Look")
-@export var color := Color(0.3, 0.65, 0.95, 0.85)
+## Colour where the water is shallow; its alpha sets how see-through it is.
+@export var shallow_color := Color(0.3, 0.65, 0.95, 0.75)
+## Colour where the water is deep, including the open sea.
+@export var deep_color := Color(0.0, 0.04, 0.18, 1.0)
+## Depth at which the water turns fully deep_color (m).
+@export_range(0.1, 50.0, 0.1, "or_greater") var deep_depth := 6.0
 ## Width of the sea (m). It follows the camera, so this only needs to reach
 ## the horizon.
 @export_range(100.0, 10000.0, 10.0) var extent := 4000.0
-## Width of one mesh cell (m). Smaller rolls short waves more smoothly.
-@export_range(0.5, 50.0, 0.5) var cell_size := 4.0
+## Width of one mesh cell near the camera (m). Smaller rolls short waves
+## more smoothly.
+@export_range(0.5, 50.0, 0.5) var cell_size := 2.0
+## How far from the camera the cells stay cell_size (m); beyond it they grow,
+## as the waves there are too far off to need the detail.
+@export_range(0.0, 1000.0, 1.0) var detail_radius := 64.0
 
 const DEPTH := 200.0  # how far below the surface bodies are still floated
+const CELL_GROWTH := 1.2  # each cell past detail_radius is this much wider
 
 var _time := 0.0
 var _mesh: MeshInstance3D
@@ -70,19 +80,57 @@ func _ready() -> void:
 
 
 func _build_key() -> Array:
-	return [extent, cell_size, amplitude, body_mask]
+	return [extent, cell_size, detail_radius, amplitude, body_mask]
 
 
 func _rebuild() -> void:
 	_built = _build_key()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(extent, extent)
-	plane.subdivide_width = int(extent / cell_size) - 1
-	plane.subdivide_depth = plane.subdivide_width
-	_mesh.mesh = plane
+	_mesh.mesh = _grid_mesh()
+	_mesh.extra_cull_margin = amplitude
 	_shape.size = Vector3(extent, DEPTH + amplitude + 1.0, extent)
 	_area.position.y = (amplitude + 1.0 - DEPTH) * 0.5
 	_area.collision_mask = body_mask
+
+
+## A square grid the width of extent, with cell_size cells out to
+## detail_radius and wider ones beyond.
+func _grid_mesh() -> ArrayMesh:
+	var half := extent * 0.5
+	var side := PackedFloat32Array([0.0])
+	var x := 0.0
+	var step := cell_size
+	while x < half:
+		if x >= detail_radius:
+			step *= CELL_GROWTH
+		x = minf(x + step, half)
+		side.append(x)
+	var axis := PackedFloat32Array()
+	for k in range(side.size() - 1, 0, -1):
+		axis.append(-side[k])
+	axis.append_array(side)
+
+	var n := axis.size()
+	var verts := PackedVector3Array()
+	verts.resize(n * n)
+	for row in n:
+		for col in n:
+			verts[row * n + col] = Vector3(axis[col], 0.0, axis[row])
+	var normals := PackedVector3Array()
+	normals.resize(n * n)
+	normals.fill(Vector3.UP)
+	var indices := PackedInt32Array()
+	for row in n - 1:
+		for col in n - 1:
+			var a := row * n + col
+			indices.append_array([a, a + 1, a + n, a + 1, a + n + 1, a + n])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
 
 
 ## Height of the surface at a world position (its y is ignored).
@@ -109,7 +157,9 @@ func _process(_delta: float) -> void:
 		center.x = snappedf(camera.global_position.x, cell_size)
 		center.z = snappedf(camera.global_position.z, cell_size)
 	_mesh.global_position = center
-	_material.set_shader_parameter("color", color)
+	_material.set_shader_parameter("shallow_color", shallow_color)
+	_material.set_shader_parameter("deep_color", deep_color)
+	_material.set_shader_parameter("deep_depth", deep_depth)
 	_material.set_shader_parameter("amplitude", amplitude)
 	_material.set_shader_parameter("period", period)
 	_material.set_shader_parameter("wavelength", wavelength)

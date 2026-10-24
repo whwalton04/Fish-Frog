@@ -165,6 +165,7 @@ var _airborne := false
 var _righting := false
 var _under: Object  # what's right under the belly, if anything
 var _carrier: Object  # what the crab is riding: under it, its feet on its footholds
+var _near_footholds: Array[Foothold] = []  # those a foot could take this tick
 var _time := 0.0
 
 
@@ -535,6 +536,7 @@ func _update_gait() -> void:
 	var lead := (flat_vel * LEAD_TIME).limit_length(_step_threshold * 0.5)
 	var moving := flat_vel.length() > 0.1 * _size or absf(angular_velocity.y) > 0.4
 	var threshold := _step_threshold if moving else _step_threshold * SETTLE_FRACTION
+	_gather_footholds(lead)
 	var belly := _ray(global_position, global_position - global_basis.y * RIDE_HEIGHT * 2.5 * _size)
 	_under = belly.get("collider")
 	_carrier = null
@@ -616,16 +618,15 @@ func _find_hold(leg: Leg, lead: Vector3) -> bool:
 func _pick_foothold(leg: Leg, home: Vector3, found: Object) -> Foothold:
 	var best: Foothold = null
 	var best_dist := INF
-	for node in get_tree().get_nodes_in_group(Foothold.GROUP):
-		var foothold := node as Foothold
-		var body := foothold.get_body() if foothold else null
-		if not body or body == self or not foothold.is_free_for(leg):
-			continue
+	for foothold in _near_footholds:
 		var radius := foothold.get_capture_radius()
 		if foothold == leg.hold_foothold:
 			radius *= FOOTHOLD_KEEP
 		var dist := foothold.global_position.distance_to(home)
 		if dist >= minf(radius, best_dist):
+			continue
+		var body := foothold.get_body()
+		if not body or body == self or not foothold.is_free_for(leg):
 			continue
 		if found and body != found and body != _under and not _standing_on(body):
 			continue
@@ -638,6 +639,23 @@ func _pick_foothold(leg: Leg, home: Vector3, found: Object) -> Foothold:
 		best = foothold
 		best_dist = dist
 	return best
+
+
+## Narrows the footholds to those near enough for any foot's home spot to
+## capture, once a tick, so each leg doesn't search every one in the world.
+func _gather_footholds(lead: Vector3) -> void:
+	var reach := 0.0
+	for leg in _legs:
+		reach = maxf(reach, leg.rest_local.length())
+	reach += lead.length()
+	_near_footholds.clear()
+	for node in get_tree().get_nodes_in_group(Foothold.GROUP):
+		var foothold := node as Foothold
+		if not foothold or not is_instance_valid(foothold):
+			continue
+		var bound := reach + foothold.get_capture_radius() * FOOTHOLD_KEEP
+		if foothold.global_position.distance_squared_to(global_position) < bound * bound:
+			_near_footholds.append(foothold)
 
 
 ## The lowest speed scale of the footholds the feet stand on or are reaching
