@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://jwj4qengayw3"]
 
 [ext_resource type="Script" uid="uid://2obt2nximl5j" path="res://crab/crab2.gd" id="1_crab2"]
-[ext_resource type="Script" path="res://world/foothold.gd" id="2_foothold"]
+[ext_resource type="Script" uid="uid://bp0tojimaw4t6" path="res://world/foothold.gd" id="2_foothold"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_shell"]
 friction = 0.3
@@ -55,52 +55,52 @@ mesh = SubResource("SphereMesh_eye")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.033, 0.024, -0.113)
 mesh = SubResource("SphereMesh_eye")
 
-[node name="Footholds" type="Node3D" parent="."]
+[node name="Footholds" type="Node3D" parent="." unique_id=446253822]
 
-[node name="FrontR" type="Marker3D" parent="Footholds"]
+[node name="FrontR" type="Marker3D" parent="Footholds" unique_id=1798962707]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.115, 0.015, -0.077)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03
 
-[node name="FrontMidR" type="Marker3D" parent="Footholds"]
+[node name="FrontMidR" type="Marker3D" parent="Footholds" unique_id=467031753]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.146, 0.015, -0.029)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03
 
-[node name="BackMidR" type="Marker3D" parent="Footholds"]
+[node name="BackMidR" type="Marker3D" parent="Footholds" unique_id=1236174951]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.147, 0.015, 0.025)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03
 
-[node name="BackR" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.122, 0.015, 0.070)
+[node name="BackR" type="Marker3D" parent="Footholds" unique_id=272199551]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.122, 0.015, 0.07)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03
 
-[node name="FrontL" type="Marker3D" parent="Footholds"]
+[node name="FrontL" type="Marker3D" parent="Footholds" unique_id=124918264]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.115, 0.015, -0.077)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03
 
-[node name="FrontMidL" type="Marker3D" parent="Footholds"]
+[node name="FrontMidL" type="Marker3D" parent="Footholds" unique_id=1221325313]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.146, 0.015, -0.029)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03
 
-[node name="BackMidL" type="Marker3D" parent="Footholds"]
+[node name="BackMidL" type="Marker3D" parent="Footholds" unique_id=289024408]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.147, 0.015, 0.025)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03
 
-[node name="BackL" type="Marker3D" parent="Footholds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.122, 0.015, 0.070)
+[node name="BackL" type="Marker3D" parent="Footholds" unique_id=2096027026]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.122, 0.015, 0.07)
 gizmo_extents = 0.03
 script = ExtResource("2_foothold")
 lift = 0.03

@@ -58,7 +58,7 @@ void sky() {
 		float angle = acos(clamp(dot(dir, LIGHT0_DIRECTION), -1.0, 1.0));
 		float radius = radians(sun_size) * 0.5;
 		color += sun_color * sun_glow * exp(-angle * 6.0) * LIGHT0_ENERGY;
-		color = mix(color, sun_color * 4.0, 1.0 - smoothstep(radius * 0.8, radius, angle));
+		color = mix(color, sun_color * 4.0 * LIGHT0_ENERGY, 1.0 - smoothstep(radius * 0.8, radius, angle));
 	}
 
 	if (dir.y > 0.0) {
