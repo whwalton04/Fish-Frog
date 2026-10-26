@@ -1,6 +1,7 @@
 extends SceneTree
 ## Headless crab-on-crab test: puts one crab on top of another on the test
-## terrain and measures how well it stands and rides there. Run with
+## terrain, or walks it into the other, and measures how the two bodies get
+## along without mounting (see stack_test.gd for that). Run with
 ##   godot --headless --path . -s tests/stand_test.gd -- <mode> <seconds>
 ## Modes:
 ##   drop        lowered straight on top
@@ -13,7 +14,7 @@ extends SceneTree
 ##               walks, turns left, walks and stops, with the rider given no
 ##               input
 ##   ground      walks on open ground with no other crab near, for comparison
-## FOOTHOLDS=0 removes the crabs' footholds, to compare. The LEGS line rates
+## The LEGS line rates
 ## how the rider's legs are drawn: jitter is the knees' frame-to-frame jerk in
 ## the body's frame, wrong_side the share of knees on the body's side of their
 ## hip, knee_rise how high the knees are above their hips on average.

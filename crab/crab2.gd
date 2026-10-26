@@ -36,6 +36,21 @@ extends RigidBody3D
 ## What the feet can stand on, other crabs included.
 @export_flags_3d_physics var foot_mask := 3
 
+@export_group("Stacking")
+## How near another crab must be to mount it, centre to centre (m).
+@export_range(0.1, 3.0, 0.01) var mount_range := 0.8
+## How much of the weight of the crabs stacked above the legs hold up without
+## giving, so a stack doesn't crush the one at the bottom. Outside forces, such
+## as a stack squeezed under a ledge, still compress the legs. 0 lets the legs
+## sag under the load like any other weight.
+@export_range(0.0, 1.0, 0.01) var carry_load := 1.0
+## How far a mounted crab may lean from upright, pivoting on its feet, as
+## the one under it moves (degrees). It rights itself from there.
+@export_range(0.0, 60.0, 0.5) var max_sway_deg := 20.0
+## How quickly a mounted crab rights itself after swaying, and the bounce of
+## its glued feet: bounces per second, as stance_hz.
+@export_range(0.5, 8.0, 0.1) var stack_hz := 2.0
+
 # Geometry at size 1.
 const BODY_HALF_EXTENTS := Vector2(0.167, 0.133)
 const HIP_HEIGHT := -0.01
@@ -63,6 +78,9 @@ const KNEE_OUTWARD := 0.5
 # Legs
 const LATERAL_STIFFNESS := 0.27  # × vertical stiffness
 const STANCE_DAMPING_RATIO := 1.04
+# The most leg damping, × the crab's mass per physics step: above about this
+# the legs chatter under a load, and as feet only push, that lifts the body.
+const MAX_STEP_DAMPING := 0.5
 # Gait, as fractions of the step threshold.
 const SETTLE_FRACTION := 0.2
 const JITTER_FRACTION := 0.2
@@ -77,6 +95,12 @@ const SELF_RIGHT_TORQUE := 0.245
 const SELF_RIGHT_DAMPING := 0.23
 const WALL_ROLL_TORQUE := 0.122  # per radian
 const WALL_ROLL_DAMPING := 0.038
+# Stack balance: damping ratio, and the most of the stable step for the
+# body's inertia the torque may use.
+const STACK_BALANCE_DAMPING := 0.7
+const STACK_BALANCE_LIMIT := 0.5
+# How far a glued crab can be pressed down into its feet, × size.
+const MAX_SQUASH := 0.06
 
 # Per-leg layout, front to back. Degrees from the side axis; negative is forward.
 const HIP_ANGLES := [-40.0, -14.0, 12.0, 36.0]
@@ -89,14 +113,6 @@ const MIN_REACH := 0.3
 const MIN_SPREAD := 0.1
 const MAX_RAISE := 0.5  # sin(30°)
 const MAX_REACH := 0.98
-## A foot on a foothold may stand this far inward of its hip and this close to
-## it, × reach, so it can straddle something narrower than its stance from
-## lying on it, rising as the feet take hold.
-const FOOTHOLD_INWARD := 0.2
-const FOOTHOLD_MIN_REACH := 0.15
-## A held foothold is kept until the foot's usual spot is this many capture
-## radii away, so the foot doesn't flick between it and the ground.
-const FOOTHOLD_KEEP := 1.5
 # Below MAX_REACH so a fresh foot isn't released straight away.
 const HOLD_REACH := 0.95
 const SELF_RIGHT_DELAY := 0.5
@@ -105,6 +121,8 @@ const MAX_PITCH := 0.466  # tan(25°)
 # Surfaces with normal.y below this (cos 60°) are walls.
 const WALL_NORMAL_Y := 0.5
 const WALL_ROLL_LAG := 0.35
+# A stack comes apart once a crab in it tips further than this (up.y).
+const MOUNT_TIP_Y := 0.3
 
 class Point:
 	var pos: Vector3
@@ -129,8 +147,7 @@ class Leg:
 	var hold_collider: Object
 	var hold_local: Vector3
 	var hold_normal_local: Vector3
-	var hold_foothold: Foothold
-	var foothold: Foothold  # the one the planted foot is on
+	var foothold: Foothold  # the one the foot is glued to, while mounted
 	var stood_on: Foothold  # as last told to the foothold
 	var segments: Array[MeshInstance3D] = []
 	var joints: Array[MeshInstance3D] = []
@@ -139,6 +156,10 @@ class Leg:
 var move_direction := Vector3.ZERO
 ## World space. Zero keeps the current facing.
 var facing_direction := Vector3.ZERO
+## The crab this one is mounted on, its feet glued to its footholds, and the
+## one mounted on this. See mount_onto().
+var mount: ContactCrab
+var rider: ContactCrab
 
 var _legs: Array[Leg] = []
 var _initialized := false
@@ -148,6 +169,7 @@ var _segment_lengths := SEGMENT_LENGTHS
 var _leg_stiffness := 0.0
 var _leg_damping := 0.0
 var _leg_max_force := 0.0
+var _carried_mass := 0.0  # own mass plus the stack's held up above
 var _step_threshold := 0.0
 var _wish := Vector3.ZERO
 var _drive := Vector3.ZERO
@@ -163,9 +185,7 @@ var _pushing := false
 var _air_time := 0.0
 var _airborne := false
 var _righting := false
-var _under: Object  # what's right under the belly, if anything
-var _carrier: Object  # what the crab is riding: under it, its feet on its footholds
-var _near_footholds: Array[Foothold] = []  # those a foot could take this tick
+var _mount_joint: Generic6DOFJoint3D
 var _time := 0.0
 
 
@@ -260,7 +280,8 @@ func _add_visual(mesh: Mesh) -> MeshInstance3D:
 func _physics_process(delta: float) -> void:
 	_time += delta
 	_update_tuning()
-	_wish = _get_wish_velocity().limit_length(move_speed * _foothold_speed_scale())
+	_check_mount()
+	_wish = _get_wish_velocity()
 	_follow_surfaces()
 	_update_target_basis(delta)
 	_update_gait()
@@ -279,6 +300,7 @@ func _physics_process(delta: float) -> void:
 
 	_apply_self_right(delta)
 	_apply_wall_roll()
+	_apply_stack_balance()
 	_tell_footholds()
 
 
@@ -288,12 +310,18 @@ func _process(_delta: float) -> void:
 
 
 ## Derives the leg and gait settings from the exports every tick, so they can
-## be tuned while running (all but size).
+## be tuned while running (all but size). Under a stack the damping grows to
+## suit the load it carries, so the stack doesn't bounce, within what one
+## physics step can integrate for the crab's own mass.
 func _update_tuning() -> void:
 	var omega := TAU * stance_hz
+	_carried_mass = mass + _stack_mass() * carry_load
 	_leg_stiffness = mass * omega * omega / _legs.size()
-	_leg_damping = STANCE_DAMPING_RATIO * 2.0 * mass * omega / _legs.size()
-	_leg_max_force = strength * mass * get_gravity().length() / _legs.size()
+	var damping := STANCE_DAMPING_RATIO * 2.0 * mass * omega
+	var loaded := damping * sqrt(_carried_mass / mass)
+	_leg_damping = maxf(damping, minf(loaded, mass * Engine.physics_ticks_per_second * MAX_STEP_DAMPING)) \
+			/ _legs.size()
+	_leg_max_force = strength * _carried_mass * get_gravity().length() / _legs.size()
 	_step_threshold = stride * _leg_reach_full()
 
 # --- Target pose --------------------------------------------------------------
@@ -302,7 +330,9 @@ func _get_wish_velocity() -> Vector3:
 	var level := Vector3(facing_direction.x, 0.0, facing_direction.z)
 	if level.length_squared() > 1e-4:
 		_desired_facing = level.normalized()
-	return Vector3(move_direction.x, 0.0, move_direction.z).limit_length(1.0) * move_speed
+	# Slower under a stack, so it isn't pulled out from under the ones on top.
+	return Vector3(move_direction.x, 0.0, move_direction.z).limit_length(1.0) * move_speed \
+			* sqrt(mass / _carried_mass)
 
 
 ## The pose the legs try to hold the body in, updated at limited rates.
@@ -317,17 +347,19 @@ func _update_target_basis(delta: float) -> void:
 				wall_sum += leg.normal
 	var forward := -_target_basis.z
 	forward = Vector3(forward.x, 0.0, forward.z).normalized()
-	# A rider turns with what it rides, until told to face elsewhere.
-	if _carrier is RigidBody3D:
-		var spin: float = (_carrier as RigidBody3D).angular_velocity.y * delta
+	# A rider turns with what it rides.
+	if mount:
+		var spin: float = mount.angular_velocity.y * delta
 		forward = forward.rotated(Vector3.UP, spin)
 		_desired_facing = _desired_facing.rotated(Vector3.UP, spin)
 		facing_direction = facing_direction.rotated(Vector3.UP, spin)
 	var turn := forward.signed_angle_to(_desired_facing, Vector3.UP)
 	forward = forward.rotated(Vector3.UP, clampf(turn, -turn_rate * delta, turn_rate * delta))
 
+	# Mounted, it balances upright rather than leaning with what's under it,
+	# which keeps a tall stack from toppling as the bottom tilts.
 	var up := Vector3.UP
-	if ground_sum.length_squared() > 1e-6:
+	if ground_sum.length_squared() > 1e-6 and not mount:
 		up = (ground_sum.normalized() + _foot_plane_up()).normalized()
 		# Crabs roll freely but pitch little.
 		var pitch := up.dot(forward)
@@ -410,9 +442,12 @@ func _pushing_into(wall_normal: Vector3) -> bool:
 
 ## Springs the hip toward the target pose over the planted feet, carries an
 ## eighth of the weight and drives toward the wished velocity, limited by the
-## friction cone.
+## friction cone. Glued feet push through the mount joint instead.
 func _push_with_leg(leg: Leg) -> void:
-	if not _in_reach(leg, leg.foot.pos, MAX_REACH, leg.foothold != null):
+	if leg.foothold:
+		_pushing = true
+		return
+	if not _in_reach(leg, leg.foot.pos, MAX_REACH):
 		leg.planted = false
 		return
 	var hip := to_global(leg.hip_local)
@@ -429,11 +464,11 @@ func _push_with_leg(leg: Leg) -> void:
 
 	var error := _fit_center + _target_basis * leg.hip_local - hip
 	var lift := up * error.dot(up)
+	# Holds up the stack above as well, so it doesn't sag under it.
 	var force := lift * _leg_stiffness + (error - lift) * _leg_stiffness * LATERAL_STIFFNESS \
 			+ (drive - hip_vel) * _leg_damping \
-			- get_gravity() * mass / _legs.size()
-	var leg_grip := leg.foothold.grip if leg.foothold and leg.foothold.grip > 0.0 else grip
-	force = _friction_cone(force, leg.normal, leg_grip).limit_length(_leg_max_force)
+			- get_gravity() * _carried_mass / _legs.size()
+	force = _friction_cone(force, leg.normal, grip).limit_length(_leg_max_force)
 	if force == Vector3.ZERO:
 		if _airborne and hip.distance_to(leg.foot.pos) > (leg.rest_local - leg.hip_local).length():
 			leg.planted = false
@@ -452,7 +487,7 @@ func _push_with_leg(leg: Leg) -> void:
 ## under it, or just ahead of it, such as another crab. Ahead looks higher, so
 ## the crab walking into another is the one that goes on top.
 func _belly_lift() -> float:
-	if _airborne or _righting:
+	if _airborne or _righting or mount:
 		return 0.0
 	var up := _target_basis.y
 	var start := global_position + up * BELLY_PROBE_HEIGHT * _size
@@ -477,9 +512,7 @@ func _belly_lift() -> float:
 
 
 ## Average body centre implied by each planted foot's rest spot. Wall feet
-## count only when no foot is on the ground. Riding, only feet on the
-## carrier's footholds count, so feet left on the ground don't hold the body
-## down on it; they're stretched until they step up too.
+## count only when no foot is on the ground.
 func _fit_body_center() -> Vector3:
 	var ground := Vector3.ZERO
 	var ground_count := 0
@@ -487,8 +520,6 @@ func _fit_body_center() -> Vector3:
 	var wall_count := 0
 	for leg in _legs:
 		if not leg.planted:
-			continue
-		if _carrier and not (leg.foothold and leg.foothold.get_body() == _carrier):
 			continue
 		var center := leg.foot.pos - _target_basis * _fit_rest(leg)
 		if leg.normal.y > WALL_NORMAL_Y:
@@ -502,20 +533,13 @@ func _fit_body_center() -> Vector3:
 	return wall / wall_count if wall_count > 0 else global_position
 
 
-## The foot's rest spot, or for a foot on a foothold, the spot along the leg's
-## outward line level with it, raised by the foothold's lift: a foothold may
-## sit anywhere from under the hip to full stretch, and only its height and
-## sideways offset place the body. Riding and not walking, it's under the
-## hip, so the rider settles to straddle the carrier, centred between its feet.
+## The foot's rest spot, or for a glued foot, under its hip and lowered by the
+## foothold's lift, so a rider straddles the crab it's on, centred between its
+## feet.
 func _fit_rest(leg: Leg) -> Vector3:
 	if not leg.foothold:
 		return leg.rest_local
-	var along := 0.0
-	if not (_carrier and leg.foothold.get_body() == _carrier and _wish.length_squared() < 0.01):
-		var local := _target_basis.inverse() * (leg.foot.pos - global_position)
-		var full := Vector2(leg.rest_local.x - leg.hip_local.x, leg.rest_local.z - leg.hip_local.z).length()
-		along = clampf((local - leg.hip_local).dot(leg.out_local), 0.0, full)
-	var rest := leg.hip_local + leg.out_local * along
+	var rest := leg.hip_local
 	rest.y = leg.rest_local.y - leg.foothold.get_lift()
 	return rest
 
@@ -536,27 +560,21 @@ func _update_gait() -> void:
 	var lead := (flat_vel * LEAD_TIME).limit_length(_step_threshold * 0.5)
 	var moving := flat_vel.length() > 0.1 * _size or absf(angular_velocity.y) > 0.4
 	var threshold := _step_threshold if moving else _step_threshold * SETTLE_FRACTION
-	_gather_footholds(lead)
-	var belly := _ray(global_position, global_position - global_basis.y * RIDE_HEIGHT * 2.5 * _size)
-	_under = belly.get("collider")
-	_carrier = null
-	for leg in _legs:
-		if leg.planted and leg.foothold and _under and leg.foothold.get_body() == _under:
-			_carrier = _under
 	var swinging := [false, false]
 	for leg in _legs:
 		if not leg.planted and leg.has_hold:
 			swinging[leg.group] = true
 
 	for leg in _legs:
+		if leg.foothold:
+			continue  # glued
 		# A swinging foot keeps its foothold, or it would chase it forever.
-		if leg.planted or not leg.has_hold \
-				or not _in_reach(leg, leg.hold, HOLD_REACH, leg.hold_foothold != null):
+		if leg.planted or not leg.has_hold or not _in_reach(leg, leg.hold, HOLD_REACH):
 			leg.has_hold = _find_hold(leg, lead)
 		if not _initialized:
 			leg.planted = leg.has_hold
 			if leg.planted:
-				_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider, leg.hold_foothold)
+				_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider)
 			continue
 		if not leg.planted or not leg.has_hold:
 			continue
@@ -569,8 +587,7 @@ func _update_gait() -> void:
 
 
 ## Raycasts in the body's frame from hip height out above the foot's home spot,
-## then down. Rising ground, or a wall being walked into, is reached along. A
-## foothold near the home spot wins over what the rays find.
+## then down. Rising ground, or a wall being walked into, is reached along.
 func _find_hold(leg: Leg, lead: Vector3) -> bool:
 	var pose := global_basis.orthonormalized()
 	var up := pose.y
@@ -598,76 +615,10 @@ func _find_hold(leg: Leg, lead: Vector3) -> bool:
 		hit = obstacle
 	if not hit.is_empty() and not _in_reach(leg, hit.position, HOLD_REACH):
 		hit = {}
-	var home := global_position + pose * leg.rest_local + lead
-	var foothold := _pick_foothold(leg, home, hit.get("collider"))
-	if foothold:
-		_set_hold(leg, foothold.global_position, foothold.get_normal(), foothold.get_body(), foothold)
-		return true
 	if hit.is_empty():
-		_hold_foothold(leg, null)
 		return false
 	_set_hold(leg, hit.position, hit.normal, hit.collider)
 	return true
-
-
-## The free foothold nearest the home spot, within its capture radius and the
-## leg's reach, or the one already held while it still qualifies. It must be
-## on what the rays found, on what the belly or a foot is on, or the rays found
-## nothing: footholds guide feet onto geometry the crab is on, they don't pull
-## it off the ground onto a neighbour.
-func _pick_foothold(leg: Leg, home: Vector3, found: Object) -> Foothold:
-	var best: Foothold = null
-	var best_dist := INF
-	for foothold in _near_footholds:
-		var radius := foothold.get_capture_radius()
-		if foothold == leg.hold_foothold:
-			radius *= FOOTHOLD_KEEP
-		var dist := foothold.global_position.distance_to(home)
-		if dist >= minf(radius, best_dist):
-			continue
-		var body := foothold.get_body()
-		if not body or body == self or not foothold.is_free_for(leg):
-			continue
-		if found and body != found and body != _under and not _standing_on(body):
-			continue
-		if not _in_reach(leg, foothold.global_position, HOLD_REACH, true):
-			continue
-		# Stays on the one it has while it can, rather than stepping across to
-		# a neighbour that has come slightly nearer.
-		if foothold == leg.hold_foothold:
-			return foothold
-		best = foothold
-		best_dist = dist
-	return best
-
-
-## Narrows the footholds to those near enough for any foot's home spot to
-## capture, once a tick, so each leg doesn't search every one in the world.
-func _gather_footholds(lead: Vector3) -> void:
-	var reach := 0.0
-	for leg in _legs:
-		reach = maxf(reach, leg.rest_local.length())
-	reach += lead.length()
-	_near_footholds.clear()
-	for node in get_tree().get_nodes_in_group(Foothold.GROUP):
-		var foothold := node as Foothold
-		if not foothold or not is_instance_valid(foothold):
-			continue
-		var bound := reach + foothold.get_capture_radius() * FOOTHOLD_KEEP
-		if foothold.global_position.distance_squared_to(global_position) < bound * bound:
-			_near_footholds.append(foothold)
-
-
-## The lowest speed scale of the footholds the feet stand on or are reaching
-## for, so a crab slows as it steps onto them rather than once it's there.
-func _foothold_speed_scale() -> float:
-	var lowest := 1.0
-	for leg in _legs:
-		if leg.planted and leg.foothold:
-			lowest = minf(lowest, leg.foothold.speed_scale)
-		if leg.has_hold and is_instance_valid(leg.hold_foothold):
-			lowest = minf(lowest, leg.hold_foothold.speed_scale)
-	return lowest
 
 
 ## Tells footholds when a foot starts or stops standing on them.
@@ -681,13 +632,6 @@ func _tell_footholds() -> void:
 		if on:
 			on.foot_planted.emit(self)
 		leg.stood_on = on
-
-
-func _standing_on(body: Object) -> bool:
-	for leg in _legs:
-		if leg.planted and leg.collider == body:
-			return true
-	return false
 
 
 ## Looks down from above hip height, so a foot can stand on top of something
@@ -717,8 +661,6 @@ func _reach_along(surface: Dictionary, goal: Vector3) -> Dictionary:
 
 
 func _scatter_hold(leg: Leg) -> void:
-	if leg.hold_foothold:
-		return
 	var n := leg.hold_normal
 	var tangent := n.cross(Vector3.RIGHT if absf(n.x) < 0.9 else Vector3.FORWARD).normalized()
 	var offset := tangent.rotated(n, randf() * TAU) * randf() * _step_threshold * JITTER_FRACTION
@@ -759,15 +701,10 @@ func _move_free_foot(leg: Leg, delta: float) -> void:
 				get_gravity(), delta)
 
 	var reach := _leg_reach(leg)
-	var min_reach := FOOTHOLD_MIN_REACH if stepping and leg.hold_foothold else MIN_REACH
-	_tether(leg.foot, hip, hip_vel, reach * min_reach, reach * MAX_REACH)
+	_tether(leg.foot, hip, hip_vel, reach * MIN_REACH, reach * MAX_REACH)
 	var hit := _collide(leg.foot, from, FOOT_RADIUS * _size)
-	var arrived := leg.foot.pos.distance_to(leg.hold) < 0.01 * _size
-	# Striking the surface by a foothold counts as standing on the foothold.
-	if stepping and leg.hold_foothold and not hit.is_empty():
-		arrived = arrived or hit.position.distance_to(leg.hold) < 0.03 * _size
-	if stepping and arrived:
-		_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider, leg.hold_foothold)
+	if stepping and leg.foot.pos.distance_to(leg.hold) < 0.01 * _size:
+		_plant(leg, leg.hold, leg.hold_normal, leg.hold_collider)
 	elif not hit.is_empty() and _in_reach(leg, hit.position, HOLD_REACH):
 		_plant(leg, hit.position, hit.normal, hit.collider)
 
@@ -787,9 +724,7 @@ func _plant(leg: Leg, at: Vector3, normal: Vector3, collider: Object,
 		leg.normal_local = body.global_basis.orthonormalized().inverse() * normal
 
 
-func _set_hold(leg: Leg, at: Vector3, normal: Vector3, collider: Object,
-		foothold: Foothold = null) -> void:
-	_hold_foothold(leg, foothold)
+func _set_hold(leg: Leg, at: Vector3, normal: Vector3, collider: Object) -> void:
 	leg.hold = at
 	leg.hold_normal = normal
 	leg.hold_collider = collider
@@ -799,17 +734,7 @@ func _set_hold(leg: Leg, at: Vector3, normal: Vector3, collider: Object,
 		leg.hold_normal_local = body.global_basis.orthonormalized().inverse() * normal
 
 
-func _hold_foothold(leg: Leg, foothold: Foothold) -> void:
-	if leg.hold_foothold == foothold:
-		return
-	if is_instance_valid(leg.hold_foothold):
-		leg.hold_foothold.release(leg)
-	if foothold:
-		foothold.claim(leg, self)
-	leg.hold_foothold = foothold
-
-
-## Moves planted feet and footholds along with whatever they're on, which may
+## Moves planted feet and holds along with whatever they're on, which may
 ## be another crab. Lets go of anything that has been freed.
 func _follow_surfaces() -> void:
 	for leg in _legs:
@@ -820,6 +745,7 @@ func _follow_surfaces() -> void:
 				leg.normal = (body.global_basis.orthonormalized() * leg.normal_local).normalized()
 			else:
 				leg.planted = false
+				leg.foothold = null
 		if leg.has_hold:
 			var body := _surface(leg.hold_collider)
 			if body:
@@ -827,7 +753,6 @@ func _follow_surfaces() -> void:
 				leg.hold_normal = (body.global_basis.orthonormalized() * leg.hold_normal_local).normalized()
 			else:
 				leg.has_hold = false
-				_hold_foothold(leg, null)
 
 
 func _surface(collider: Object) -> Node3D:
@@ -856,16 +781,13 @@ func _ground_velocity() -> Vector3:
 
 
 ## Between folded and stretched, on the leg's own side, not far above the hip.
-## A foothold may be nearer and further in.
-func _in_reach(leg: Leg, point: Vector3, max_fraction: float, foothold := false) -> bool:
+func _in_reach(leg: Leg, point: Vector3, max_fraction: float) -> bool:
 	var to_point := point - to_global(leg.hip_local)
 	var dist := to_point.length()
 	var reach := _leg_reach(leg)
-	var min_reach := FOOTHOLD_MIN_REACH if foothold else MIN_REACH
-	var min_spread := -FOOTHOLD_INWARD if foothold else MIN_SPREAD
-	return dist > reach * min_reach and dist < reach * max_fraction \
+	return dist > reach * MIN_REACH and dist < reach * max_fraction \
 			and to_point.dot(global_basis.y) < dist * MAX_RAISE \
-			and to_point.dot(global_basis * leg.out_local) > reach * min_spread
+			and to_point.dot(global_basis * leg.out_local) > reach * MIN_SPREAD
 
 
 func _leg_reach(leg: Leg) -> float:
@@ -875,6 +797,197 @@ func _leg_reach(leg: Leg) -> float:
 ## Reach of a full-length leg (length scale 1).
 func _leg_reach_full() -> float:
 	return _segment_lengths.x + _segment_lengths.y + _segment_lengths.z
+
+# --- Mounting -----------------------------------------------------------------
+
+## Whether this crab can mount `target` now: another crab, upright, within
+## mount_range and not stacked on this one.
+func can_mount(target: Node3D) -> bool:
+	var crab := target as ContactCrab
+	if not is_instance_valid(crab) or crab == self or crab == mount \
+			or crab.global_basis.y.y < MOUNT_TIP_Y or crab.get_footholds().is_empty():
+		return false
+	var above := rider
+	while is_instance_valid(above):
+		if above == crab:
+			return false
+		above = above.rider
+	return crab.global_position.distance_to(global_position) < mount_range
+
+
+## Teleports onto `target`, upright and facing its way, with each foot glued
+## to one of its footholds. Whatever was riding `target` goes on top of the
+## stack riding this crab, so a crab mounting into a stack goes in between and
+## lifts the ones above. Moving gets off again (see dismount()).
+func mount_onto(target: Node3D) -> bool:
+	if not can_mount(target):
+		return false
+	var carrier := target as ContactCrab
+	dismount()
+	var above := carrier.rider
+	carrier.rider = self
+	mount = carrier
+	var top := self
+	while is_instance_valid(top.rider):
+		top = top.rider
+	if above:
+		top.rider = above
+		above.mount = top
+	var crab := self
+	while is_instance_valid(crab):
+		crab._snap_to(crab.mount)
+		crab = crab.rider
+	return true
+
+
+## Lets go of the crab underneath. The feet go limp, and the crab drops onto
+## its shell and walks like anywhere else. The stack above stays on this one.
+func dismount() -> void:
+	if is_instance_valid(mount) and mount.rider == self:
+		mount.rider = null
+	mount = null
+	if _mount_joint:
+		_mount_joint.queue_free()
+		_mount_joint = null
+	for leg in _legs:
+		if leg.foothold:
+			leg.foothold = null
+			leg.planted = false
+			leg.has_hold = false
+			leg.foot.vel = Vector3.ZERO
+
+
+func get_footholds() -> Array[Foothold]:
+	var footholds: Array[Foothold] = []
+	for node in find_children("*", "Marker3D", true, false):
+		if node is Foothold and node.get_body() == self:
+			footholds.append(node)
+	return footholds
+
+
+## Mass of the crabs stacked above.
+func _stack_mass() -> float:
+	var total := 0.0
+	var above := rider
+	while is_instance_valid(above):
+		total += above.mass
+		above = above.rider
+	return total
+
+
+## Gets off when told to move, or once the stack has tipped over.
+func _check_mount() -> void:
+	if is_instance_valid(rider) and rider.mount != self:
+		rider = null
+	if mount == null:
+		return
+	var moving := Vector3(move_direction.x, 0.0, move_direction.z).length_squared() > 0.01
+	if not is_instance_valid(mount) or mount.rider != self or moving \
+			or mount.global_basis.y.y < MOUNT_TIP_Y or global_basis.y.y < MOUNT_TIP_Y:
+		dismount()
+	elif _mount_joint:
+		_tune_mount_joint()
+
+
+## Puts the body where its glued feet hold it at rest on `carrier`, each foot
+## on the free foothold nearest its hip.
+func _snap_to(carrier: ContactCrab) -> void:
+	var forward := -carrier.global_basis.z
+	forward = Vector3(forward.x, 0.0, forward.z)
+	if forward.length_squared() < 1e-4:
+		forward = Vector3(-carrier.global_basis.y.x, 0.0, -carrier.global_basis.y.z)
+	var pose := Basis.looking_at(forward.normalized(), Vector3.UP)
+
+	# Nearest pairs first, so no foot takes another's spot.
+	var pairs := []
+	var size_ratio := carrier._size / _size
+	for leg in _legs:
+		leg.foothold = null
+		leg.planted = false
+		leg.has_hold = false
+		for foothold in carrier.get_footholds():
+			var spot := carrier.to_local(foothold.global_position)
+			pairs.append([Vector2(spot.x, spot.z).distance_squared_to(
+					Vector2(leg.hip_local.x, leg.hip_local.z) * size_ratio), leg, foothold])
+	pairs.sort_custom(func(a, b): return a[0] < b[0])
+	var taken := {}
+	var center := Vector3.ZERO
+	var count := 0
+	for pair in pairs:
+		var leg: Leg = pair[1]
+		var foothold: Foothold = pair[2]
+		if leg.foothold or taken.has(foothold):
+			continue
+		taken[foothold] = true
+		leg.foothold = foothold
+		center += foothold.global_position - pose * _fit_rest(leg)
+		count += 1
+
+	global_transform = Transform3D(pose, center / count)
+	linear_velocity = carrier.linear_velocity + carrier.angular_velocity.cross(global_position - carrier.global_position)
+	angular_velocity = carrier.angular_velocity
+	_target_basis = pose
+	_desired_facing = forward.normalized()
+	facing_direction = Vector3.ZERO
+	_wall_roll = 0.0
+	_stuck_time = 0.0
+	var feet := Vector3.ZERO
+	for leg in _legs:
+		if leg.foothold:
+			_plant(leg, leg.foothold.global_position, leg.foothold.get_normal(), carrier, leg.foothold)
+			feet += leg.foot.pos
+		else:
+			leg.foot.pos = to_global(leg.rest_local)
+			leg.foot.vel = linear_velocity
+	_make_mount_joint(carrier, Transform3D(pose, feet / count))
+
+
+## Glues this crab to `carrier` at its feet, `at`: held there sideways and in
+## turn, free to lean from upright up to max_sway_deg, and sprung up and down.
+func _make_mount_joint(carrier: ContactCrab, at: Transform3D) -> void:
+	if _mount_joint:
+		_mount_joint.free()
+	_mount_joint = Generic6DOFJoint3D.new()
+	add_child(_mount_joint)
+	_mount_joint.global_transform = at
+	var sway := deg_to_rad(max_sway_deg)
+	for axis in 3:
+		var y := axis == 1
+		_set_joint_flag(axis, Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+		_set_joint_param(axis, Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, -MAX_SQUASH * _size if y else 0.0)
+		_set_joint_param(axis, Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+		_set_joint_flag(axis, Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_SPRING, y)
+		_set_joint_flag(axis, Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT, true)
+		_set_joint_param(axis, Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT, 0.0 if y else -sway)
+		_set_joint_param(axis, Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT, 0.0 if y else sway)
+	_mount_joint.node_a = _mount_joint.get_path_to(carrier)
+	_mount_joint.node_b = _mount_joint.get_path_to(self)
+	_tune_mount_joint()
+
+
+## The up-down spring of the glued feet, preloaded with the weight on them so
+## the stack keeps its height, and only an outside push presses it down.
+func _tune_mount_joint() -> void:
+	var omega := TAU * stack_hz
+	var stiffness := _carried_mass * omega * omega
+	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, stiffness)
+	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 2.0 * _carried_mass * omega)
+	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_SPRING_EQUILIBRIUM_POINT,
+			_carried_mass * get_gravity().length() / stiffness)
+
+
+func _set_joint_flag(axis: int, flag: Generic6DOFJoint3D.Flag, value: bool) -> void:
+	match axis:
+		0: _mount_joint.set_flag_x(flag, value)
+		1: _mount_joint.set_flag_y(flag, value)
+		2: _mount_joint.set_flag_z(flag, value)
+
+
+func _set_joint_param(axis: int, param: Generic6DOFJoint3D.Param, value: float) -> void:
+	match axis:
+		0: _mount_joint.set_param_x(param, value)
+		1: _mount_joint.set_param_y(param, value)
+		2: _mount_joint.set_param_z(param, value)
 
 # --- Points on tethers ----------------------------------------------------------
 
@@ -943,6 +1056,32 @@ func _apply_wall_roll() -> void:
 		axis = axis.normalized() * angle
 	var k := _torque_scale()
 	apply_torque(axis * WALL_ROLL_TORQUE * k.x - angular_velocity * WALL_ROLL_DAMPING * k.y)
+
+
+## Holds a crab in a stack at its target tilt against the weight above it,
+## which its legs are set too close in to carry: without it a tall stack
+## folds over like a tower of blocks. Upright, the stack can only shear
+## sideways against the glued feet, which is the sway.
+func _apply_stack_balance() -> void:
+	if not (mount or is_instance_valid(rider)) or _righting or _wall_roll > 0.0:
+		return
+	var axis := global_basis.y.cross(_target_basis.y)
+	var angle := global_basis.y.angle_to(_target_basis.y)
+	if axis.length_squared() > 1e-8:
+		axis = axis.normalized() * angle
+	var spin := angular_velocity - _target_basis.y * angular_velocity.dot(_target_basis.y)
+	# Kept within what one physics step can integrate for the body's inertia.
+	var inv_inertia := PhysicsServer3D.body_get_direct_state(get_rid()).inverse_inertia
+	var inertia := 1.0 / maxf(inv_inertia[inv_inertia.max_axis_index()], 1e-6)
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	# As a pendulum on its feet, rocking at stack_hz with gravity cancelled.
+	var height := (RIDE_HEIGHT + BODY_HALF_HEIGHT) * _size
+	var omega := TAU * stack_hz
+	var stiffness := minf(_carried_mass * height * (height * omega * omega + get_gravity().length()),
+			STACK_BALANCE_LIMIT * inertia / (dt * dt))
+	var damping := minf(STACK_BALANCE_DAMPING * 2.0 * sqrt(stiffness * inertia),
+			STACK_BALANCE_LIMIT * inertia / dt)
+	apply_torque(axis * stiffness - spin * damping)
 
 
 ## The body's weight on a lever its own size (x), and the damping (y) that

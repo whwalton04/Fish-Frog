@@ -98,55 +98,69 @@ against the body. If it hits a wall, do the same while walking into the wall;
 otherwise put the foot on the floor at the wall's base. Nothing reachable means
 the foot goes limp.
 
-### Foothold nodes
+## Stacking
 
-For geometry the query handles badly, a `Foothold` marker (`world/foothold.gd`)
-names a spot to stand and the direction to push (its +Y). A foot goes there
-instead of where the rays land when its home spot is within the marker's
-capture radius, the marker is free, and the marker's body is one the crab is
-already on: the rays hit it, a planted foot or the belly is on it, or the rays
-found nothing. Without that last rule, crabs walking side by side would pull
-their feet onto each other's shells. A held marker is kept out to 1.5× the
-radius so feet don't flick on and off it.
+Walking crabs ignore each other's footholds: they bump, push and climb over
+shells like any other geometry. Riding is a separate, explicit mode.
 
-The reason is the crab's own shell. The stance is about 0.75 m wide and the
-shell 0.31 m, so a crab on top of another finds every shell point under its
-hips, where reach rules reject it, and a foot on the steep rim is clipped by
-the friction cone. Rim footholds pointing up let it straddle the shell. Their
-reach rules are looser (down to 0.15 × reach from the hip, slightly inward),
-so a crab lying on a shell can put its feet down. They also don't pull the body
-along the leg: only their height and sideways offset feed the body fit. As the
-feet take hold the body rises and the legs straighten.
+### Mounting
 
-A foothold can also change how the crab stands while a foot is on it: `lift`
-raises the body, `speed_scale` caps its speed over that body (from when a foot
-reaches for the foothold, so it slows as it climbs on), `grip` replaces the
-crab's friction for that foot, and `foot_planted` / `foot_lifted` signals let
-anything else react. Crab shells use lift 0.03, speed 0.3 and grip 2, which
-leaves about 0.1 m between the shells.
+While steering one crab on its own, the player marks the crab it's looking at
+(nearest the middle of the view, within the crab's `mount_range`) with a
+billboard arrow. The mount action (space) calls `mount_onto()`, which
+teleports the crab on top: upright, facing the same way, each foot glued to
+the `Foothold` marker (`world/foothold.gd`) nearest its hip. The body goes
+where those feet hold it at rest, straddling the shell under its hips and
+raised by the markers' `lift`.
 
-#### Riding
+Mounting a crab that already has one on top puts the newcomer in between: the
+crabs above move up onto it, so any number can be stacked. A crab that mounts
+brings its own riders along. Moving a mounted crab gets it off (`dismount()`):
+its feet go limp and it drops onto the shell and walks off like anywhere else.
+So does the stack tipping past about 70°. In group steering, mounted crabs
+aren't steered, so a stack walks with the crab at the bottom.
 
-A crab whose belly is over a body and has a foot on one of that body's
-footholds is riding it. Riding changes three things. Only the feet on the
-carrier's footholds set the body's height, so feet left on the ground get
-stretched and step up instead of holding the body down on the shell. With no
-input, those feet count as standing under their hips, which centres the rider
-between them. And the rider's facing turns with the carrier. The rims carry
-footholds under where a centred rider's hips are. Feet stay on their foothold
-while it still qualifies, rather than stepping to a neighbour that has come
-slightly nearer.
+### Glue
 
-A rider's feet are nearly under its hips, which the leg drawing didn't expect:
-the direction to the foot was too short to trust and up ran along the leg, so
-knees flicked about and folded under the body. The drawing now eases from the
-direction to the foot toward the leg's own outward direction as the foot comes
-in, bends the knee up and out, and leans the dactyl outward under the hip so
-the knee has room. Feet standing out from the hip are drawn as before.
+A mounted crab's feet are pinned to their markers and don't step. Their pull
+on the body is a Jolt `Generic6DOFJoint3D` at the feet's centre, not the leg
+springs. An explicit spring chain five crabs tall bounced, chattered and blew
+apart however it was tuned; the joint is solved implicitly. The joint:
 
-`tests/stand_test.gd` drops a crab on another, walks one onto another from
-behind and from the side at half and full speed, rides a carrier through
-turns, and walks across another crab.
+- holds the feet in place sideways and in turn;
+- lets the body lean up to `max_sway_deg`, pivoting on its feet;
+- springs up and down at `stack_hz`, critically damped, with the spring
+  preloaded by the weight it carries. The stack keeps its height however
+  many are on it, and only an outside push (a ledge, a crab landing on top)
+  presses it down, up to `MAX_SQUASH`. It springs back after.
+
+### Holding a stack up
+
+- **Load.** A crab carries its own mass plus `carry_load` × the crabs above.
+  Its legs hold that weight up without sagging (feed-forward), their force
+  limit grows with it, and their damping grows with its square root, so the
+  loaded crab stays critically damped. That damping is capped at half the
+  crab's mass per physics step: above that the legs chatter under a load, and
+  as feet only push, the chatter lifts the body. The legs' stiffness stays
+  set by the crab's own mass, so an outside push still compresses them.
+- **Speed.** A loaded crab walks at `sqrt(mass / carried)` of its speed, so
+  it isn't pulled out from under the ones on top.
+- **Balance.** Every crab in a stack is held at its target tilt by a damped
+  torque, as a pendulum on its feet rocking at `stack_hz`, sized to the
+  weight it carries. Mounted crabs aim for upright, not the tilt of what's
+  under them. The legs alone stand too close in (hips 0.13 m from the centre)
+  to hold the tilt of a few crabs' weight, and the tower folded over. Upright,
+  a stack can only lean and shear at the feet, which is the sway when the
+  bottom crab moves. The torque's stiffness and damping are capped at what one
+  physics step can integrate for the body's inertia; uncapped, inserting a
+  crab into a stack spun the bottom one and the stack shot off.
+
+`tests/stack_test.gd` builds a stack of five, mounting on top and into the
+middle, walks the bottom crab forward and then sideways, gets the top crab off
+by moving it, and pushes down on the stack from outside. It prints the gaps
+(0.152 m each, the same at every height), the top's sway (about 0.16 m) and
+the compression. `tests/mount_test.gd` checks the player's arrow, the mount
+action and that moving gets off.
 
 ## Walls: lean away, then flip
 
@@ -180,7 +194,7 @@ for one situation.
   so the far feet keep hold while the crab leans away from a wall. Without the
   "own side" part, at full sideways speed the body overran its leading feet
   faster than they could step, and dragged them along folded under it.
-- **Footholds are picked at lift-off and kept.** Re-aiming every tick at a
+- **Holds are picked at lift-off and kept.** Re-aiming every tick at a
   foothold that moves with the body means a swinging foot never catches up.
 - **Swings strike.** The swing target sits a little into the surface, and the
   spring damps toward rest (the foothold is fixed in the world). A critically
@@ -248,6 +262,9 @@ one doesn't upset the others. The rest are constants derived from them.
 | `stride` | 0.4 | Step threshold as a fraction of leg reach; settle threshold and foothold jitter are 0.2× that, and the lead ahead is capped at half of it |
 | `climb_rate` | 0.5 rad/s | Wall roll rate; 0 never climbs (feet stand at a wall's base) |
 | `can_self_right` | true | |
+
+Stacking has four more (see Stacking): `mount_range` (0.8 m), `carry_load`
+(1.0), `max_sway_deg` (20°) and `stack_hz` (2.0).
 
 Recovery torques scale with `m·g·size`, and their damping with
 `m·size·√(g·size)`, so they behave the same at any mass and size. Swing and

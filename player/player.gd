@@ -15,6 +15,11 @@ extends Node3D
 ## wait; 1 goes back to the group. The group is whoever is near each other: an
 ## animal left far from the others is dropped off beside the player, and an
 ## animal in the `animals` group that comes near a member joins.
+##
+## While steering one animal, the animal it's looking at (nearest the middle of
+## the view, within its mount_range) is marked with an arrow, and the mount
+## action (space) puts it on top. Animals mounted on others aren't steered with
+## the group, so a stack walks as one; steering one on its own gets it off.
 
 const ANIMAL_GROUP := &"animals"
 
@@ -28,13 +33,29 @@ const ANIMAL_GROUP := &"animals"
 ## A member leaves when it's this far from the rest, across the ground (m).
 ## Wider than join_radius, so one at the edge doesn't flicker in and out.
 @export var leave_radius := 3.0
+## The most an animal can be off the middle of the view and still be the one
+## looked at (degrees).
+@export var look_angle_deg := 30.0
 
 ## The animal steered on its own, or null when steering the group. It may have
 ## wandered out of the group and still be steered.
 var controlled: Node3D = null
+## What the controlled animal would mount, or null.
+var looked_at: Node3D = null
+
+var _arrow: MeshInstance3D
+
+
+func _ready() -> void:
+	_arrow = _make_arrow()
+	add_child(_arrow)
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("mount") and looked_at:
+		controlled.mount_onto(looked_at)
+		get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var number: int = event.physical_keycode - KEY_0
@@ -74,6 +95,9 @@ func _physics_process(_delta: float) -> void:
 	var focus := get_center() + move.normalized() * converge_distance
 	var limit := deg_to_rad(max_converge_deg)
 	for animal in steered:
+		if not controlled and animal.get("mount"):
+			animal.move_direction = Vector3.ZERO
+			continue
 		var to_focus := focus - animal.global_position
 		to_focus.y = 0.0
 		var turn := 0.0
@@ -82,6 +106,64 @@ func _physics_process(_delta: float) -> void:
 		animal.move_direction = move.rotated(Vector3.UP, turn)
 		if "facing_direction" in animal:
 			animal.facing_direction = forward.rotated(Vector3.UP, turn)
+
+
+func _process(_delta: float) -> void:
+	looked_at = _find_looked_at()
+	_arrow.visible = looked_at != null
+	if looked_at:
+		var size: float = looked_at.get("size") if "size" in looked_at else 1.0
+		var bob := sin(Time.get_ticks_msec() * 0.006) * 0.015
+		_arrow.global_position = looked_at.global_position + Vector3.UP * (0.12 + bob) * size
+		_arrow.scale = Vector3.ONE * size
+
+
+## The animal the controlled one can mount nearest the middle of the view.
+func _find_looked_at() -> Node3D:
+	if not controlled or not is_instance_valid(controlled) or not controlled.has_method("mount_onto"):
+		return null
+	var cam := get_viewport().get_camera_3d()
+	if not cam:
+		return null
+	var best: Node3D = null
+	var best_angle := deg_to_rad(look_angle_deg)
+	var candidates := get_animals()
+	for animal in get_tree().get_nodes_in_group(ANIMAL_GROUP):
+		if animal is Node3D and animal not in candidates:
+			candidates.append(animal)
+	for animal in candidates:
+		if not controlled.can_mount(animal):
+			continue
+		var angle := (-cam.global_basis.z).angle_to(animal.global_position - cam.global_position)
+		if angle < best_angle:
+			best = animal
+			best_angle = angle
+	return best
+
+
+## A downward-pointing triangle that always faces the camera, drawn over
+## everything.
+func _make_arrow() -> MeshInstance3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.billboard_keep_scale = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.no_depth_test = true
+	mat.albedo_color = Color(1.0, 0.85, 0.2)
+	var mesh := ArrayMesh.new()
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([
+		Vector3(-0.035, 0.06, 0.0), Vector3(0.035, 0.06, 0.0), Vector3(0.0, 0.0, 0.0)])
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, mat)
+	var arrow := MeshInstance3D.new()
+	arrow.mesh = mesh
+	arrow.top_level = true
+	arrow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	arrow.visible = false
+	return arrow
 
 
 func get_animals() -> Array[Node3D]:
