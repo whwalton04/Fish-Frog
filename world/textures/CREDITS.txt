@@ -1,0 +1,23 @@
+Terrain texture credits
+=======================
+
+Downloaded 2026-10-26 at 1K (1024x1024) PNG resolution. All are CC0 (public
+domain): free for any use, commercial included, with no attribution required.
+They're credited here anyway.
+
+Each set was channel-packed for Terrain3D:
+  <name>_albedo.png  RGB = colour (diffuse),          A = height (displacement)
+  <name>_normal.png  RGB = normal map (OpenGL, +Y),   A = roughness
+
+
+main   "Forest Ground 04"     by Poly Haven     https://polyhaven.com/a/forest_ground_04
+grass  "Grass 004"            by ambientCG      https://ambientcg.com/view?id=Grass004
+dirt   "Brown Mud Leaves 01"  by Poly Haven     https://polyhaven.com/a/brown_mud_leaves_01
+stone  "Aerial Rocks 02"      by Poly Haven     https://polyhaven.com/a/aerial_rocks_02
+snow   "Snow 006"             by ambientCG      https://ambientcg.com/view?id=Snow006
+
+sand   unchanged, not from either site.
+
+Licences:
+  Poly Haven  https://polyhaven.com/license   (CC0)
+  ambientCG   https://docs.ambientcg.com/license/   (CC0)
