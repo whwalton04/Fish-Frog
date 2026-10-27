@@ -49,6 +49,9 @@ extends RigidBody3D
 ## How quickly a mounted crab rights itself after swaying, and the bounce of
 ## its glued feet: bounces per second, as stance_hz.
 @export_range(0.5, 8.0, 0.1) var stack_hz := 2.0
+## How high a jump off a stack arcs above the higher of where it starts and
+## lands (m, × size).
+@export_range(0.0, 2.0, 0.01) var jump_height := 0.25
 
 # Geometry at size 1.
 const BODY_HALF_EXTENTS := Vector2(0.167, 0.133)
@@ -820,7 +823,7 @@ func can_mount(target: Node3D) -> bool:
 ## Teleports onto `target`, upright and facing its way, with each foot glued
 ## to one of its footholds. Whatever was riding `target` goes on top of the
 ## stack riding this crab, so a crab mounting into a stack goes in between and
-## lifts the ones above. Moving gets off again (see dismount()).
+## lifts the ones above. Jumping gets off again (see jump_to()).
 func mount_onto(target: Node3D) -> bool:
 	if not can_mount(target):
 		return false
@@ -840,6 +843,28 @@ func mount_onto(target: Node3D) -> bool:
 		crab._snap_to(crab.mount)
 		crab = crab.rider
 	return true
+
+
+## Gets off the crab underneath and leaps in an arc to land with its feet at
+## `target`, facing the way it jumped. The stack above comes along.
+func jump_to(target: Vector3) -> void:
+	dismount()
+	var g := get_gravity().length()
+	var start := global_position
+	var landing := target + Vector3.UP * RIDE_HEIGHT * _size
+	var peak := maxf(start.y, landing.y) + jump_height * _size
+	var rise := sqrt(2.0 * (peak - start.y) / g)
+	var fall := sqrt(2.0 * (peak - landing.y) / g)
+	var across := Vector3(landing.x - start.x, 0.0, landing.z - start.z)
+	var velocity := across / maxf(rise + fall, 1e-3) + Vector3.UP * g * rise
+	if across.length_squared() > 1e-4:
+		_desired_facing = across.normalized()
+	facing_direction = Vector3.ZERO
+	var crab := self
+	while is_instance_valid(crab):
+		crab.linear_velocity = velocity
+		crab.angular_velocity = Vector3.ZERO
+		crab = crab.rider
 
 
 ## Lets go of the crab underneath. The feet go limp, and the crab drops onto
@@ -877,14 +902,13 @@ func _stack_mass() -> float:
 	return total
 
 
-## Gets off when told to move, or once the stack has tipped over.
+## Gets off once the stack has tipped over.
 func _check_mount() -> void:
 	if is_instance_valid(rider) and rider.mount != self:
 		rider = null
 	if mount == null:
 		return
-	var moving := Vector3(move_direction.x, 0.0, move_direction.z).length_squared() > 0.01
-	if not is_instance_valid(mount) or mount.rider != self or moving \
+	if not is_instance_valid(mount) or mount.rider != self \
 			or mount.global_basis.y.y < MOUNT_TIP_Y or global_basis.y.y < MOUNT_TIP_Y:
 		dismount()
 	elif _mount_joint:

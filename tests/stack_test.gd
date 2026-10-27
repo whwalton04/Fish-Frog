@@ -80,12 +80,11 @@ func _physics_process(delta: float) -> bool:
 		_report("after walking", alone_height)
 	# The top one moves off.
 	var leaving: ContactCrab = crabs[4]
-	if t > 6.6 and t < 7.0:
-		leaving.move_direction = Vector3.RIGHT
-	elif t >= 7.0:
-		leaving.move_direction = Vector3.ZERO
+	if is_equal_approx(t, 6.6):
+		var below: ContactCrab = leaving.mount
+		leaving.jump_to(Vector3(below.global_position.x + 1.0, 0.0, below.global_position.z))
 	if is_equal_approx(t, 8.0):
-		print("top moved: mounted=%s  stack=%s" % [leaving.mount != null, _stack_names()])
+		print("top jumped: mounted=%s  stack=%s" % [leaving.mount != null, _stack_names()])
 		squeeze_before = _stack()[-1].global_position.y - bottom.global_position.y
 	# An outside push down on the top, three times a crab's weight.
 	if t > 8.0 and t < 9.0:

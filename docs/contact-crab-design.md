@@ -115,10 +115,15 @@ raised by the markers' `lift`.
 
 Mounting a crab that already has one on top puts the newcomer in between: the
 crabs above move up onto it, so any number can be stacked. A crab that mounts
-brings its own riders along. Moving a mounted crab gets it off (`dismount()`):
-its feet go limp and it drops onto the shell and walks off like anywhere else.
-So does the stack tipping past about 70°. In group steering, mounted crabs
-aren't steered, so a stack walks with the crab at the bottom.
+brings its own riders along. Mounted crabs aren't steered, so a stack walks
+with the crab at the bottom. To get off, the player looks at the floor: with
+no crab to mount in view, the arrow marks where the view meets the floor,
+brought within 0.6–2 m (× size) of the rider, and space calls `jump_to()`. That
+lets go (`dismount()`) and launches the crab on a ballistic arc peaking
+`jump_height` above the higher of its start and landing, so it comes down with
+its feet on the marked spot; its riders come with it. Its feet go limp in the
+air and plant on landing like anywhere else. The stack tipping past about 70°
+also lets go. Space with another crab in view still mounts that one directly.
 
 ### Glue
 
@@ -156,11 +161,12 @@ apart however it was tuned; the joint is solved implicitly. The joint:
   crab into a stack spun the bottom one and the stack shot off.
 
 `tests/stack_test.gd` builds a stack of five, mounting on top and into the
-middle, walks the bottom crab forward and then sideways, gets the top crab off
-by moving it, and pushes down on the stack from outside. It prints the gaps
+middle, walks the bottom crab forward and then sideways, jumps the top crab
+off, and pushes down on the stack from outside. It prints the gaps
 (0.152 m each, the same at every height), the top's sway (about 0.16 m) and
 the compression. `tests/mount_test.gd` checks the player's arrow, the mount
-action and that moving gets off.
+action, that moving no longer gets off, and that space jumps down to the
+marked spot on the floor.
 
 ## Walls: lean away, then flip
 

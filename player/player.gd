@@ -14,12 +14,16 @@ extends Node3D
 ## Keys 2-9 take one animal (in child order) to steer on its own while the rest
 ## wait; 1 goes back to the group. The group is whoever is near each other: an
 ## animal left far from the others is dropped off beside the player, and an
-## animal in the `animals` group that comes near a member joins.
+## animal in the `animals` group that comes near a member joins. Walking the
+## controlled animal away from the others makes it the group instead: the
+## others are dropped off, and it gathers a new group from whoever it meets.
 ##
 ## While steering one animal, the animal it's looking at (nearest the middle of
 ## the view, within its mount_range) is marked with an arrow, and the mount
-## action (space) puts it on top. Animals mounted on others aren't steered with
-## the group, so a stack walks as one; steering one on its own gets it off.
+## action (space) puts it on top. Animals mounted on others aren't steered, so
+## a stack walks as one. One mounted with nothing to mount looked at marks the
+## spot on the floor it's looking at instead, at least min_jump_radius away,
+## and space jumps it down there.
 
 const ANIMAL_GROUP := &"animals"
 
@@ -36,12 +40,21 @@ const ANIMAL_GROUP := &"animals"
 ## The most an animal can be off the middle of the view and still be the one
 ## looked at (degrees).
 @export var look_angle_deg := 30.0
+## How near and far a jump off a stack lands, across the ground from where
+## it starts (m, × the animal's size).
+@export var min_jump_radius := 0.6
+@export var max_jump_radius := 2.0
+## What the floor a jump lands on is made of.
+@export_flags_3d_physics var floor_mask := 1
 
 ## The animal steered on its own, or null when steering the group. It may have
 ## wandered out of the group and still be steered.
 var controlled: Node3D = null
 ## What the controlled animal would mount, or null.
 var looked_at: Node3D = null
+## Where on the floor the controlled animal would jump down to, while mounted.
+var jump_target := Vector3.ZERO
+var has_jump_target := false
 
 var _arrow: MeshInstance3D
 
@@ -52,8 +65,12 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("mount") and looked_at:
-		controlled.mount_onto(looked_at)
+	if event.is_action_pressed("mount"):
+		if looked_at:
+			controlled.mount_onto(looked_at)
+		elif has_jump_target:
+			controlled.jump_to(jump_target)
+			has_jump_target = false
 		get_viewport().set_input_as_handled()
 		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -73,6 +90,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(_delta: float) -> void:
 	_update_membership()
+	_update_jump_target()
 	var steered := get_steered()
 	if steered.is_empty():
 		return
@@ -95,7 +113,7 @@ func _physics_process(_delta: float) -> void:
 	var focus := get_center() + move.normalized() * converge_distance
 	var limit := deg_to_rad(max_converge_deg)
 	for animal in steered:
-		if not controlled and animal.get("mount"):
+		if animal.get("mount"):
 			animal.move_direction = Vector3.ZERO
 			continue
 		var to_focus := focus - animal.global_position
@@ -110,11 +128,15 @@ func _physics_process(_delta: float) -> void:
 
 func _process(_delta: float) -> void:
 	looked_at = _find_looked_at()
-	_arrow.visible = looked_at != null
+	_arrow.visible = looked_at != null or has_jump_target
+	var bob := sin(Time.get_ticks_msec() * 0.006) * 0.015
 	if looked_at:
 		var size: float = looked_at.get("size") if "size" in looked_at else 1.0
-		var bob := sin(Time.get_ticks_msec() * 0.006) * 0.015
 		_arrow.global_position = looked_at.global_position + Vector3.UP * (0.12 + bob) * size
+		_arrow.scale = Vector3.ONE * size
+	elif has_jump_target:
+		var size: float = controlled.get("size") if "size" in controlled else 1.0
+		_arrow.global_position = jump_target + Vector3.UP * (0.02 + bob) * size
 		_arrow.scale = Vector3.ONE * size
 
 
@@ -139,6 +161,43 @@ func _find_looked_at() -> Node3D:
 			best = animal
 			best_angle = angle
 	return best
+
+
+## Where the view meets the floor, brought within min_jump_radius..
+## max_jump_radius of the controlled animal across the ground, while it's
+## mounted and has no animal to mount in view.
+func _update_jump_target() -> void:
+	has_jump_target = false
+	if not controlled or not is_instance_valid(controlled) or not controlled.get("mount") \
+			or not controlled.has_method("jump_to") or looked_at:
+		return
+	var cam := get_viewport().get_camera_3d()
+	if not cam:
+		return
+	var size: float = controlled.get("size") if "size" in controlled else 1.0
+	var from := controlled.global_position
+	var view := -cam.global_basis.z
+	var flat_view := Vector3(view.x, 0.0, view.z)
+	if flat_view.length_squared() < 1e-4:
+		flat_view = Vector3(-cam.global_basis.y.x, 0.0, -cam.global_basis.y.z)
+	var dir := flat_view.normalized()
+	var space := get_world_3d().direct_space_state
+	var distance := max_jump_radius * size
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(
+			cam.global_position, cam.global_position + view * 100.0, floor_mask))
+	if not hit.is_empty():
+		var across: Vector3 = hit.position - from
+		across.y = 0.0
+		if across.dot(dir) > 0.0:
+			distance = across.length()
+	distance = clampf(distance, min_jump_radius * size, max_jump_radius * size)
+	var spot := from + dir * distance
+	var down := space.intersect_ray(PhysicsRayQueryParameters3D.create(
+			spot + Vector3.UP * 10.0, spot + Vector3.DOWN * 10.0, floor_mask))
+	if down.is_empty():
+		return
+	jump_target = down.position
+	has_jump_target = true
 
 
 ## A downward-pointing triangle that always faces the camera, drawn over
@@ -198,13 +257,15 @@ func _control(animal: Node3D) -> void:
 	controlled = animal
 
 
-## Keeps the biggest cluster of members, dropping off the rest, then takes in
-## strays near it. On a tie the controlled animal's cluster is the one to go,
-## so walking it away from the others takes it out of the group.
+## Keeps the controlled animal's cluster of members, or with none controlled
+## the biggest, dropping off the rest, then takes in strays near it.
 func _update_membership() -> void:
 	var keep: Array[Node3D] = []
 	for cluster in _clusters(get_animals()):
-		if cluster.size() > keep.size() or (cluster.size() == keep.size() and controlled in keep):
+		if controlled in cluster:
+			keep = cluster
+			break
+		if cluster.size() > keep.size():
 			keep = cluster
 	for animal in get_animals():
 		if animal not in keep:
