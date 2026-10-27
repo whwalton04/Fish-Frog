@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://deyak448gynlj" path="res://bird.gd" id="2_aqk2v"]
 [ext_resource type="Script" uid="uid://c251manuatwnb" path="res://camera_pivot.gd" id="3_036b0"]
 [ext_resource type="Script" uid="uid://kibsv5k7yh32" path="res://animation.gd" id="3_w4bpu"]
-[ext_resource type="PackedScene" uid="uid://c8qbjo0cbfb8x" path="res://low_poly_bird_animated.glb" id="4_dwbse"]
+[ext_resource type="PackedScene" uid="uid://ct8k14ts1ispb" path="res://bird_mesh.glb" id="4_dwbse"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_5abyb"]
 
@@ -117,8 +117,8 @@ spring_length = 4.0
 
 [node name="Visuals" type="Node3D" parent="bird" unique_id=1909521750]
 
-[node name="Sketchfab_Scene" parent="bird/Visuals" unique_id=1470389269 instance=ExtResource("4_dwbse")]
-transform = Transform3D(-0.229, 0, -2.0019815e-08, 0, 0.252, 0, 2.0019815e-08, 0, -0.229, 0, -0.83, 0)
+[node name="bird_mesh" parent="bird/Visuals" unique_id=1116997579 instance=ExtResource("4_dwbse")]
+transform = Transform3D(-0.355, -1.9277373e-08, -2.4321992e-08, 0, 0.27821115, -0.22050744, 3.1035086e-08, -0.22050744, -0.27821115, 0, -1.28, 0)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=691898158]
 environment = SubResource("Environment_g3bud")

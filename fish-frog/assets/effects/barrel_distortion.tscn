@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Shader" path="res://assets/effects/barrel_distortion.gdshader" id="1_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_lens"]
+resource_local_to_scene = true
+shader = ExtResource("1_shader")
+shader_parameter/strength = 0.0
+
+[node name="BarrelDistortion" type="ColorRect"]
+visible = false
+material = SubResource("ShaderMaterial_lens")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2

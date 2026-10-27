@@ -1,0 +1,14 @@
+Speed Lines Shader for Godot 4
+Author: axilirate
+Source: https://godotshaders.com/shader/speed-lines-shader-for-godot-4/
+License: CC0 1.0 Universal (public domain dedication)
+License reference: https://creativecommons.org/publicdomain/zero/1.0/
+Retrieved: 2026-10-20
+
+The source page explicitly licenses its shader code under CC0.
+Only the shader code is reused; no preview images or videos are included.
+
+Local adaptations:
+- Clamp the radial mask to prevent overshoot at the corners.
+- Multiply final alpha by the CanvasItem modulate alpha for speed-based fading.
+- Supply a Godot NoiseTexture2D resource and scene with tuned defaults.

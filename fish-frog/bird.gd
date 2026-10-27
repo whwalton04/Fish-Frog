@@ -2,7 +2,8 @@ extends RigidBody3D
 
 @export var flap_boost: float = 5.0
 @export var forward_acceleration: float = 8.0
-@export var braking_deceleration: float = 12.0
+@export var braking_deceleration: float = 3.0
+@export_range(0.0, 2.0, 0.01) var glide_drag: float = 0.08
 @export var maximum_pitch: float = deg_to_rad(60)
 @export var maximum_roll: float = deg_to_rad(45)
 @export var maximum_turn_rate: float = deg_to_rad(120)
@@ -95,7 +96,7 @@ func _response_weight(delta: float, response_time: float) -> float:
 
 
 func _update_steering(delta: float, controls_active: bool = true) -> void:
-	var horizontal_speed := Vector2(linear_velocity.x,linear_velocity.y).length()
+	var horizontal_speed := Vector2(linear_velocity.x, linear_velocity.z).length()
 	var full_turn_speed: float = 25.0
 	var speed_fraction := clampf(
 		horizontal_speed / full_turn_speed,
@@ -136,19 +137,29 @@ func _steer_velocity(motion: Vector3, forward: Vector3, delta: float) -> Vector3
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var controls_active := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	_update_steering(state.step, controls_active)
-	var motion := state.linear_velocity
-	if controls_active and Input.is_action_pressed("boost"):
+	state.linear_velocity = _update_flight_velocity(state.linear_velocity, state.step,
+		controls_active, Input.is_action_pressed("boost"))
+
+
+func _update_flight_velocity(motion: Vector3, delta: float, controls_active: bool, accelerating: bool) -> Vector3:
+	if controls_active:
 		var forward := -Basis.from_euler(Vector3(pitch, yaw, 0.0)).z
-		motion += forward * forward_acceleration * state.step
-		motion = _steer_velocity(motion, forward, state.step)
+		if accelerating:
+			motion += forward * forward_acceleration * delta
+		# Redirect existing momentum even when the accelerate button is released.
+		motion = _steer_velocity(motion, forward, delta)
+		if not accelerating:
+			# Glide with gentle drag instead of actively braking to a stop.
+			var retention := exp(-glide_drag * delta)
+			motion.x *= retention
+			motion.z *= retention
 	else:
-		# Releasing boost brakes horizontal motion; gravity and flaps remain active.
+		# Releasing mouse control still brakes horizontal motion.
 		var horizontal := Vector3(motion.x, 0.0, motion.z)
-		horizontal = horizontal.move_toward(Vector3.ZERO, braking_deceleration * state.step)
+		horizontal = horizontal.move_toward(Vector3.ZERO, braking_deceleration * delta)
 		motion.x = horizontal.x
 		motion.z = horizontal.z
-	motion.limit_length(max_velocity)
-	state.linear_velocity = motion
+	return motion.limit_length(max_velocity)
 
 
 func _limited_camera_angle(current: float, target: float, delta: float, limit: float) -> float:

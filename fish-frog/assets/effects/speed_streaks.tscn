@@ -1,0 +1,49 @@
+[gd_scene load_steps=6 format=3]
+
+[sub_resource type="Gradient" id="Gradient_fade"]
+offsets = PackedFloat32Array(0, 0.12, 0.75, 1)
+colors = PackedColorArray(1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_fade"]
+gradient = SubResource("Gradient_fade")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_streaks"]
+resource_local_to_scene = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 16.0
+emission_ring_radius = 6.0
+emission_ring_inner_radius = 2.0
+direction = Vector3(0, 0, 1)
+spread = 0.0
+initial_velocity_min = 28.0
+initial_velocity_max = 34.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.7
+scale_max = 1.2
+color_ramp = SubResource("GradientTexture1D_fade")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_white"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 1, 1, 1)
+disable_fog = true
+
+[sub_resource type="BoxMesh" id="BoxMesh_short_streak"]
+material = SubResource("StandardMaterial3D_white")
+size = Vector3(0.018, 0.018, 0.5)
+
+[node name="SpeedStreaks" type="GPUParticles3D"]
+position = Vector3(0, 0, -18)
+visible = false
+cast_shadow = 0
+emitting = false
+amount = 96
+amount_ratio = 0.0
+lifetime = 1.1
+local_coords = true
+fixed_fps = 60
+visibility_aabb = AABB(-7, -7, -12, 14, 14, 55)
+process_material = SubResource("ParticleProcessMaterial_streaks")
+draw_pass_1 = SubResource("BoxMesh_short_streak")

@@ -85,6 +85,41 @@ func _run() -> void:
 		var reversed: Vector3 = bird._steer_velocity(Vector3(0.0, 0.0, -10.0), Vector3.BACK, 0.1)
 		_check(reversed.is_finite() and is_equal_approx(reversed.length(), 10.0), "Opposite velocity must turn without losing speed or producing invalid values")
 
+	# Heading response must use X/Z speed, independent of falling or climbing.
+	bird.cursor_offset = Vector2(200.0, 0.0)
+	bird.linear_velocity = Vector3(0.0, 0.0, -25.0)
+	bird.yaw = 0.0
+	bird.roll = -bird.maximum_roll
+	bird._update_steering(0.1)
+	var forward_turn: float = absf(bird.yaw)
+	bird.linear_velocity = Vector3(25.0, 0.0, 0.0)
+	bird.yaw = 0.0
+	bird.roll = -bird.maximum_roll
+	bird._update_steering(0.1)
+	_check(is_equal_approx(absf(bird.yaw), forward_turn), "Equal horizontal speed must turn equally regardless of world direction")
+	bird.linear_velocity = Vector3(0.0, -25.0, 0.0)
+	bird.yaw = 0.0
+	bird.roll = -bird.maximum_roll
+	bird._update_steering(0.1)
+	_check(absf(bird.yaw) < forward_turn * 0.5, "Vertical speed alone must not give full horizontal turning strength")
+
+	if not bird.has_method("_update_flight_velocity"):
+		_check(false, "Glide movement must steer even without acceleration")
+	else:
+		bird.yaw = -PI / 2.0
+		bird.pitch = 0.0
+		var gliding: Vector3 = bird._update_flight_velocity(Vector3(0.0, 0.0, -20.0), 0.1, true, false)
+		_check(gliding.x > 0.1 and gliding.z < 0.0, "Releasing accelerate must still bend momentum toward the flight heading")
+		bird.yaw = 0.0
+		var coasting := Vector3(0.0, 0.0, -20.0)
+		for tick in range(60):
+			coasting = bird._update_flight_velocity(coasting, 1.0 / 60.0, true, false)
+		_check(coasting.length() > 17.0 and coasting.length() <= 20.0, "A one-second glide must retain momentum without adding thrust")
+		var boosted: Vector3 = bird._update_flight_velocity(Vector3(0.0, 0.0, -20.0), 0.1, true, true)
+		_check(boosted.length() > 20.0, "Accelerate must still add forward thrust")
+		var capped: Vector3 = bird._update_flight_velocity(Vector3(0.0, 0.0, -1000.0), 0.1, true, true)
+		_check(capped.length() <= bird.max_velocity + 0.001, "Flight velocity must respect its configured speed cap")
+
 	if not bird.has_method("_update_camera"):
 		_check(false, "Camera follow must have a limited angular lag")
 	else:
