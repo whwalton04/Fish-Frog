@@ -124,6 +124,9 @@ const WALL_ROLL_LAG := 0.35
 # A stack comes apart once a crab in it tips further than this (up.y).
 const MOUNT_TIP_Y := 0.3
 
+## A foot has come down on a surface. `leg` indexes the crab's eight legs.
+signal foot_down(leg: int, at: Vector3, normal: Vector3, collider: Object)
+
 class Point:
 	var pos: Vector3
 	var vel := Vector3.ZERO
@@ -722,6 +725,7 @@ func _plant(leg: Leg, at: Vector3, normal: Vector3, collider: Object,
 	if body:
 		leg.foot_local = body.global_transform.affine_inverse() * leg.foot.pos
 		leg.normal_local = body.global_basis.orthonormalized().inverse() * normal
+	foot_down.emit(_legs.find(leg), at, normal, collider)
 
 
 func _set_hold(leg: Leg, at: Vector3, normal: Vector3, collider: Object) -> void:

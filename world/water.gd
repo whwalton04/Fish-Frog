@@ -19,6 +19,15 @@ extends Node3D
 ## Compass heading the waves roll toward (degrees, 0 = +X).
 @export_range(-180.0, 180.0, 1.0) var direction_deg := 0.0
 
+## The terrain the foam rings. Its heights are baked when the water is
+## ready; rebake after sculpting it.
+@export var terrain: Terrain3D:
+	set(value):
+		terrain = value
+		if is_node_ready():
+			bake_shore.call_deferred()
+@export_tool_button("Rebake shore") var _rebake_shore := bake_shore
+
 @export_group("Floating")
 ## Upward push on a body fully under, × its weight. Above 1 floats, and a
 ## body floats with about 1 / this of itself under.
@@ -33,11 +42,26 @@ extends Node3D
 
 @export_group("Look")
 ## Colour where the water is shallow; its alpha sets how see-through it is.
-@export var shallow_color := Color(0.3, 0.65, 0.95, 0.75)
+@export var shallow_color := Color(0.4, 0.95, 0.78, 0.55)
 ## Colour where the water is deep, including the open sea.
-@export var deep_color := Color(0.0, 0.04, 0.18, 1.0)
+@export var deep_color := Color(0.12, 0.48, 0.39, 1.0)
 ## Depth at which the water turns fully deep_color (m).
-@export_range(0.1, 50.0, 0.1, "or_greater") var deep_depth := 6.0
+@export_range(0.1, 50.0, 0.1, "or_greater") var deep_depth := 10.0
+## Pale colour the sea fades to where it's seen at a low angle, toward the
+## horizon.
+@export var horizon_color := Color(0.66, 0.7, 0.6, 1.0)
+## How tightly the horizon colour hugs the horizon; higher keeps more of the
+## sea deep-coloured.
+@export_range(0.5, 10.0, 0.1) var horizon_falloff := 6.0
+## Colour of the foam where the water meets the shore; its alpha sets how
+## thick the foam looks.
+@export var foam_color := Color(0.95, 0.97, 1.0, 0.9)
+## How far out from the waterline the foam reaches (m).
+@export_range(0.0, 10.0, 0.01, "or_greater") var foam_width := 0.8
+## How ragged the foam's edge is, 0 for a clean band.
+@export_range(0.0, 2.0, 0.01) var foam_breakup := 0.6
+## Size of the foam's blotches (m).
+@export_range(0.1, 20.0, 0.1) var foam_scale := 1.5
 ## Width of the sea (m). It follows the camera, so this only needs to reach
 ## the horizon.
 @export_range(100.0, 10000.0, 10.0) var extent := 4000.0
@@ -77,6 +101,36 @@ func _ready() -> void:
 	_area.add_child(collider)
 	add_child(_area)
 	_rebuild()
+	bake_shore.call_deferred()
+
+
+## Bakes terrain's heights into a texture the water shader samples straight
+## down from each point, to find the shore for the foam.
+func bake_shore() -> void:
+	if not _material:
+		return
+	if not terrain or not terrain.data or terrain.data.get_region_locations().is_empty():
+		_material.set_shader_parameter("shore_heights", null)
+		_material.set_shader_parameter("shore_rect", Vector4.ZERO)
+		return
+	var spacing := terrain.vertex_spacing
+	var region := terrain.region_size * spacing
+	var lo := Vector2i(1 << 30, 1 << 30)
+	var hi := -lo
+	for loc: Vector2i in terrain.data.get_region_locations():
+		lo = lo.min(loc)
+		hi = hi.max(loc + Vector2i.ONE)
+	var origin := Vector2(lo) * region
+	var size := Vector2(hi - lo) * region
+	var cells := Vector2i((size / spacing).round())
+	var image := Image.create_empty(cells.x, cells.y, false, Image.FORMAT_RF)
+	for row in cells.y:
+		for col in cells.x:
+			var at := origin + (Vector2(col, row) + Vector2(0.5, 0.5)) * spacing
+			var h := terrain.data.get_height(Vector3(at.x, 0.0, at.y))
+			image.set_pixel(col, row, Color(-1e4 if is_nan(h) else h, 0.0, 0.0))
+	_material.set_shader_parameter("shore_heights", ImageTexture.create_from_image(image))
+	_material.set_shader_parameter("shore_rect", Vector4(origin.x, origin.y, size.x, size.y))
 
 
 func _build_key() -> Array:
@@ -160,6 +214,12 @@ func _process(_delta: float) -> void:
 	_material.set_shader_parameter("shallow_color", shallow_color)
 	_material.set_shader_parameter("deep_color", deep_color)
 	_material.set_shader_parameter("deep_depth", deep_depth)
+	_material.set_shader_parameter("horizon_color", horizon_color)
+	_material.set_shader_parameter("horizon_falloff", horizon_falloff)
+	_material.set_shader_parameter("foam_color", foam_color)
+	_material.set_shader_parameter("foam_width", maxf(foam_width, 0.001))
+	_material.set_shader_parameter("foam_breakup", foam_breakup)
+	_material.set_shader_parameter("foam_scale", foam_scale)
 	_material.set_shader_parameter("amplitude", amplitude)
 	_material.set_shader_parameter("period", period)
 	_material.set_shader_parameter("wavelength", wavelength)

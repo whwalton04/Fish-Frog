@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://cyvkjvxhfv7rv" path="res://world/textures/sand_albedo.png" id="3_sand"]
 [ext_resource type="Script" uid="uid://doquacmblwahg" path="res://world/water.gd" id="4_water"]
 [ext_resource type="Shader" uid="uid://b1vxab0vd8gvg" path="res://world/sky.gdshader" id="5_sky"]
+[ext_resource type="Script" path="res://world/footprints.gd" id="6_footprints"]
 [ext_resource type="Texture2D" uid="uid://bxt80b27qacjr" path="res://world/textures/dirt_albedo.png" id="tex_dirt_albedo"]
 [ext_resource type="Texture2D" uid="uid://crv1irwaf40hr" path="res://world/textures/dirt_normal.png" id="tex_dirt_normal"]
 [ext_resource type="Texture2D" uid="uid://bkn6k63p8lprd" path="res://world/textures/grass_albedo.png" id="tex_grass_albedo"]
@@ -19,19 +20,13 @@
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("5_sky")
-shader_parameter/top_color = Color(0.22, 0.47, 0.85, 1)
-shader_parameter/horizon_color = Color(0.7, 0.85, 0.97, 1)
+shader_parameter/top_color = Color(0.057, 0.219, 0.502, 1)
+shader_parameter/horizon_color = Color(0.306, 0.469, 0.851, 1)
 shader_parameter/below_color = Color(0.45, 0.6, 0.75, 1)
 shader_parameter/gradient_curve = 0.6
 shader_parameter/sun_color = Color(1, 0.95, 0.85, 1)
 shader_parameter/sun_size = 2.5
 shader_parameter/sun_glow = 0.3
-shader_parameter/cloud_color = Color(1, 1, 1, 1)
-shader_parameter/cloud_shade = Color(0.72, 0.78, 0.86, 1)
-shader_parameter/coverage = 0.45
-shader_parameter/softness = 0.15
-shader_parameter/cloud_scale = 1.0
-shader_parameter/wind = Vector2(0.01, 0.004)
 
 [sub_resource type="Sky" id="Sky_sky"]
 sky_material = SubResource("ShaderMaterial_sky")
@@ -39,7 +34,8 @@ sky_material = SubResource("ShaderMaterial_sky")
 [sub_resource type="Environment" id="Environment_env"]
 background_mode = 2
 sky = SubResource("Sky_sky")
-ambient_light_source = 3
+ambient_light_source = 2
+ambient_light_color = Color(0.61, 0.76, 0.95, 1)
 tonemap_mode = 2
 
 [sub_resource type="Gradient" id="Gradient_hyim0"]
@@ -171,9 +167,15 @@ vertex_spacing = 0.5
 top_level = true
 metadata/_edit_lock_ = true
 
-[node name="Water" type="Node3D" parent="." unique_id=1118210247]
+[node name="Water" type="Node3D" parent="." unique_id=1118210247 node_paths=PackedStringArray("terrain")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 script = ExtResource("4_water")
+terrain = NodePath("../Terrain3D")
+
+[node name="Footprints" type="Node3D" parent="." node_paths=PackedStringArray("terrain", "sun")]
+script = ExtResource("6_footprints")
+terrain = NodePath("../Terrain3D")
+sun = NodePath("../Sun")
 
 [node name="Player" parent="." unique_id=738606376 instance=ExtResource("2_player")]
 transform = Transform3D(0.62581784, 0.7799693, 0, -0.7799693, 0.62581784, 0, 0, 0, 1, 14.483256, 1.8495321, 0)
