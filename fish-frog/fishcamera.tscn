@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cqow47bch5ocs"]
+
+[ext_resource type="Script" uid="uid://bempvqvskvxb7" path="res://fishcamera.gd" id="1_fkipy"]
+
+[node name="fishcamera" type="Node3D" unique_id=288200011]
+script = ExtResource("1_fkipy")
