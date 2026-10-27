@@ -69,6 +69,11 @@ const STEP_UP_RAISE := 0.4
 const FOOT_RADIUS := 0.002
 # Merus, carpus+propodus, dactyl.
 const SEGMENT_LENGTHS := Vector3(0.14, 0.133, 0.08)
+# How much of what longer lower legs add goes into raising the body.
+const EXTENSION_RISE := 1.0
+# How far from its hip, × its reach, a stretched leg stands its foot: wider
+# than usual, so the knee isn't folded up over the hip.
+const STILT_STANCE := 0.9
 const DACTYL_TILT_DEG := 20.0
 const STRADDLE_TILT_DEG := 45.0  # leaning out, with the foot under the hip
 ## How far out, × reach, a foot must stand before the leg reaches toward it
@@ -76,6 +81,8 @@ const STRADDLE_TILT_DEG := 45.0  # leaning out, with the foot under the hip
 const OUTWARD_SPREAD := 0.3
 ## How much the knee leans out as well as up.
 const KNEE_OUTWARD := 0.5
+## How much a stilt leg's knee rises as well as leans out.
+const STILT_KNEE_UP := 0.2
 
 # Legs
 const LATERAL_STIFFNESS := 0.27  # × vertical stiffness
@@ -137,6 +144,7 @@ class Leg:
 	var hip_local: Vector3
 	var rest_local: Vector3
 	var out_local: Vector3
+	var out_reach: float  # how far out from the hip the foot rests, across
 	var length_scale: float
 	var group: int  # legs in the same group step together
 	var foot := Point.new()
@@ -165,6 +173,10 @@ var facing_direction := Vector3.ZERO
 ## one mounted on this. See mount_onto().
 var mount: ContactCrab
 var rider: ContactCrab
+## How many times their usual length the lower legs (carpus, propodus and
+## dactyl) are. The body rides higher by most of what they add. Special crabs
+## change it; see StiltCrab.
+var leg_extension := 1.0
 
 var _legs: Array[Leg] = []
 var _initialized := false
@@ -191,6 +203,9 @@ var _air_time := 0.0
 var _airborne := false
 var _righting := false
 var _mount_joint: Generic6DOFJoint3D
+# Ride height when the mount joint was made, so the joint lets the body up by
+# what longer legs have added since.
+var _mount_ride := 0.0
 var _time := 0.0
 
 
@@ -242,8 +257,8 @@ func _make_leg(side: float, i: int) -> Leg:
 	leg.hip_local = Vector3(
 		hip_dir.x * BODY_HALF_EXTENTS.x * 0.9, HIP_HEIGHT, hip_dir.z * BODY_HALF_EXTENTS.y * 0.9) * _size
 	leg.out_local = foot_dir
-	leg.rest_local = leg.hip_local + foot_dir * FOOT_REACH[i] * leg.length_scale * _size
-	leg.rest_local.y = -RIDE_HEIGHT * _size
+	leg.out_reach = FOOT_REACH[i] * leg.length_scale * _size
+	_place_rest(leg)
 	leg.group = (i + (1 if side > 0.0 else 0)) % 2
 	leg.foot.pos = to_global(leg.rest_local)
 	return leg
@@ -326,11 +341,38 @@ func _update_tuning() -> void:
 	_leg_damping = maxf(damping, minf(loaded, mass * Engine.physics_ticks_per_second * MAX_STEP_DAMPING)) \
 			/ _legs.size()
 	_leg_max_force = strength * _carried_mass * get_gravity().length() / _legs.size()
+	_segment_lengths = SEGMENT_LENGTHS * Vector3(1.0, leg_extension, leg_extension) * _size
+	for leg in _legs:
+		_place_rest(leg)
 	_step_threshold = stride * _leg_reach_full()
+
+
+## How far below the centre the feet stand at rest, with the lower legs at
+## leg_extension.
+func _ride_height() -> float:
+	var added := (SEGMENT_LENGTHS.y + SEGMENT_LENGTHS.z) * (leg_extension - 1.0)
+	return (RIDE_HEIGHT + added * EXTENSION_RISE) * _size
+
+
+## Where the foot rests: out_reach across from the hip, ride height down,
+## spreading out as the lower legs stretch.
+func _place_rest(leg: Leg) -> void:
+	var down := _ride_height() + leg.hip_local.y
+	var stilt := sqrt(maxf(pow(STILT_STANCE * _leg_reach(leg), 2.0) - down * down, 0.0))
+	var across := lerpf(leg.out_reach, maxf(stilt, leg.out_reach), clampf(leg_extension - 1.0, 0.0, 1.0))
+	leg.rest_local = leg.hip_local + leg.out_local * across
+	leg.rest_local.y = -_ride_height()
+
+
+## Whether the crab may walk and turn now. Special crabs say no while busy.
+func can_walk() -> bool:
+	return true
 
 # --- Target pose --------------------------------------------------------------
 
 func _get_wish_velocity() -> Vector3:
+	if not can_walk():
+		return Vector3.ZERO
 	var level := Vector3(facing_direction.x, 0.0, facing_direction.z)
 	if level.length_squared() > 1e-4:
 		_desired_facing = level.normalized()
@@ -503,7 +545,7 @@ func _belly_lift() -> float:
 	var lift := 0.0
 	for i in samples.size():
 		var from: Vector3 = start + samples[i]
-		var hit := _ray(from, from - up * (BELLY_PROBE_HEIGHT + RIDE_HEIGHT) * _size)
+		var hit := _ray(from, from - up * (BELLY_PROBE_HEIGHT * _size + _ride_height()))
 		if hit.is_empty():
 			continue
 		# Under the body, only what's below the centre counts, or a crab being
@@ -806,18 +848,26 @@ func _leg_reach_full() -> float:
 # --- Mounting -----------------------------------------------------------------
 
 ## Whether this crab can mount `target` now: another crab, upright, within
-## mount_range and not stacked on this one.
+## mount_range and not in the same stack.
 func can_mount(target: Node3D) -> bool:
 	var crab := target as ContactCrab
-	if not is_instance_valid(crab) or crab == self or crab == mount \
-			or crab.global_basis.y.y < MOUNT_TIP_Y or crab.get_footholds().is_empty():
+	if not is_instance_valid(crab) or crab.global_basis.y.y < MOUNT_TIP_Y \
+			or crab.get_footholds().is_empty() or crab in get_stacked():
 		return false
-	var above := rider
-	while is_instance_valid(above):
-		if above == crab:
-			return false
-		above = above.rider
 	return crab.global_position.distance_to(global_position) < mount_range
+
+
+## The crabs in this one's stack, bottom first, this one included.
+func get_stacked() -> Array[ContactCrab]:
+	var bottom := self
+	while is_instance_valid(bottom.mount) and bottom.mount.rider == bottom:
+		bottom = bottom.mount
+	var stack: Array[ContactCrab] = []
+	var crab := bottom
+	while is_instance_valid(crab) and crab not in stack:
+		stack.append(crab)
+		crab = crab.rider
+	return stack
 
 
 ## Teleports onto `target`, upright and facing its way, with each foot glued
@@ -851,7 +901,7 @@ func jump_to(target: Vector3) -> void:
 	dismount()
 	var g := get_gravity().length()
 	var start := global_position
-	var landing := target + Vector3.UP * RIDE_HEIGHT * _size
+	var landing := target + Vector3.UP * _ride_height()
 	var peak := maxf(start.y, landing.y) + jump_height * _size
 	var rise := sqrt(2.0 * (peak - start.y) / g)
 	var fall := sqrt(2.0 * (peak - landing.y) / g)
@@ -882,6 +932,54 @@ func dismount() -> void:
 			leg.planted = false
 			leg.has_hold = false
 			leg.foot.vel = Vector3.ZERO
+
+
+## Takes this crab out of any stack at once: off the crab under it, and the
+## one on it off this. The joints go now rather than at the end of the frame,
+## so the crab can be moved straight after.
+func leave_stack() -> void:
+	if is_instance_valid(rider) and rider.mount == self:
+		rider._let_go()
+	_let_go()
+
+
+func _let_go() -> void:
+	if _mount_joint:
+		_mount_joint.free()
+		_mount_joint = null
+	dismount()
+
+
+## Leaves any stack and puts the crab at `at`, upright, still and in the air,
+## its legs hanging and every bit of walking and climbing state back to
+## how it starts, so it falls and lands like a fresh crab.
+func drop_at(at: Vector3) -> void:
+	leave_stack()
+	var pose := Basis.looking_at(_desired_facing, Vector3.UP)
+	global_transform = Transform3D(pose, at)
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	move_direction = Vector3.ZERO
+	facing_direction = Vector3.ZERO
+	_target_basis = pose
+	_wish = Vector3.ZERO
+	_drive = Vector3.ZERO
+	_wall_roll = 0.0
+	_wall_normal = Vector3.ZERO
+	_walls_seen = Vector3.ZERO
+	_stuck_time = 0.0
+	_righting = false
+	_air_time = AIRBORNE_DELAY
+	_airborne = true
+	for leg in _legs:
+		leg.planted = false
+		leg.has_hold = false
+		leg.foothold = null
+		leg.collider = null
+		leg.hold_collider = null
+		leg.foot.pos = to_global(leg.rest_local)
+		leg.foot.vel = Vector3.ZERO
+	_tell_footholds()
 
 
 func get_footholds() -> Array[Foothold]:
@@ -974,6 +1072,7 @@ func _make_mount_joint(carrier: ContactCrab, at: Transform3D) -> void:
 	if _mount_joint:
 		_mount_joint.free()
 	_mount_joint = Generic6DOFJoint3D.new()
+	_mount_ride = _ride_height()
 	add_child(_mount_joint)
 	_mount_joint.global_transform = at
 	var sway := deg_to_rad(max_sway_deg)
@@ -992,14 +1091,18 @@ func _make_mount_joint(carrier: ContactCrab, at: Transform3D) -> void:
 
 
 ## The up-down spring of the glued feet, preloaded with the weight on them so
-## the stack keeps its height, and only an outside push presses it down.
+## the stack keeps its height, and only an outside push presses it down. Its
+## limits rise with the ride height, so longer legs lift the body off the feet.
 func _tune_mount_joint() -> void:
 	var omega := TAU * stack_hz
 	var stiffness := _carried_mass * omega * omega
+	var raise := _ride_height() - _mount_ride
+	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, raise - MAX_SQUASH * _size)
+	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, raise)
 	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_SPRING_STIFFNESS, stiffness)
 	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_SPRING_DAMPING, 2.0 * _carried_mass * omega)
 	_set_joint_param(1, Generic6DOFJoint3D.PARAM_LINEAR_SPRING_EQUILIBRIUM_POINT,
-			_carried_mass * get_gravity().length() / stiffness)
+			raise + _carried_mass * get_gravity().length() / stiffness)
 
 
 func _set_joint_flag(axis: int, flag: Generic6DOFJoint3D.Flag, value: bool) -> void:
@@ -1101,7 +1204,7 @@ func _apply_stack_balance() -> void:
 	var inertia := 1.0 / maxf(inv_inertia[inv_inertia.max_axis_index()], 1e-6)
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	# As a pendulum on its feet, rocking at stack_hz with gravity cancelled.
-	var height := (RIDE_HEIGHT + BODY_HALF_HEIGHT) * _size
+	var height := _ride_height() + BODY_HALF_HEIGHT * _size
 	var omega := TAU * stack_hz
 	var stiffness := minf(_carried_mass * height * (height * omega * omega + get_gravity().length()),
 			STACK_BALANCE_LIMIT * inertia / (dt * dt))
@@ -1148,21 +1251,19 @@ func _pose_leg(leg: Leg) -> void:
 		dactyl += lean.normalized() * sin(tilt)
 	var ankle := foot + dactyl * lengths.z
 
-	# Two-bone IK hip -> ankle, knee bent up and out. With the foot out from
-	# the hip that's straight up; with it underneath, up alone is along the
-	# leg and the outward part keeps the knee arched over its own side.
-	var to_ankle := ankle - hip
-	var dist := to_ankle.length()
-	var dir := to_ankle / dist if dist > 1e-5 else outward
-	var reach := clampf(dist, absf(lengths.x - lengths.y) + 1e-3, lengths.x + lengths.y - 1e-3)
-	var bend := up + outward * KNEE_OUTWARD
-	var pole := bend - dir * bend.dot(dir)
-	pole = pole.normalized() if pole.length_squared() > 1e-6 else up
-	var along := (lengths.x * lengths.x - lengths.y * lengths.y + reach * reach) / (2.0 * reach)
-	var rise := sqrt(maxf(lengths.x * lengths.x - along * along, 0.0))
-	var knee := hip + dir * along + pole * rise
-	if dist > reach:
-		ankle = hip + dir * reach
+	# Stretched lower legs stand straight down from the knee like stilts, the
+	# knee out to the side: bent as usual, the long carpus would fold the knee
+	# up over the hip.
+	var straight := clampf(leg_extension - 1.0, 0.0, 1.0)
+	var bend := (up + outward * KNEE_OUTWARD).lerp(outward + up * STILT_KNEE_UP, straight)
+	if straight > 0.0:
+		var stilt_knee := _knee(hip, foot, lengths.x, lengths.y + lengths.z, outward, bend, up)
+		ankle = ankle.lerp(stilt_knee + (foot - stilt_knee).normalized() * lengths.y, straight)
+
+	var knee := _knee(hip, ankle, lengths.x, lengths.y, outward, bend, up)
+	var max_reach := lengths.x + lengths.y - 1e-3
+	if hip.distance_to(ankle) > max_reach:
+		ankle = hip + (ankle - hip).normalized() * max_reach
 
 	_place_segment(leg.segments[0], hip, knee)
 	_place_segment(leg.segments[1], knee, ankle)
@@ -1170,6 +1271,23 @@ func _pose_leg(leg: Leg) -> void:
 	leg.joints[0].global_position = hip
 	leg.joints[1].global_position = knee
 	leg.joints[2].global_position = ankle
+
+
+## Two-bone IK from `hip` to `target` with bones `a` and `b` long: the knee,
+## bent toward `bend`. As usual that's up and out: with the target out from
+## the hip, straight up; with it underneath, up alone is along the leg and the
+## outward part keeps the knee arched over its own side.
+func _knee(hip: Vector3, target: Vector3, a: float, b: float, outward: Vector3, bend: Vector3,
+		up: Vector3) -> Vector3:
+	var to_target := target - hip
+	var dist := to_target.length()
+	var dir := to_target / dist if dist > 1e-5 else outward
+	var reach := clampf(dist, absf(a - b) + 1e-3, a + b - 1e-3)
+	var pole := bend - dir * bend.dot(dir)
+	pole = pole.normalized() if pole.length_squared() > 1e-6 else up
+	var along := (a * a - b * b + reach * reach) / (2.0 * reach)
+	var rise := sqrt(maxf(a * a - along * along, 0.0))
+	return hip + dir * along + pole * rise
 
 
 func _place_segment(mi: MeshInstance3D, from: Vector3, to: Vector3) -> void:

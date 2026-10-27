@@ -30,12 +30,12 @@ func _physics_process(delta: float) -> bool:
 				scout = player.get_animals()[0]
 				old_members = player.get_animals()
 				old_members.erase(scout)
-				_press_key(KEY_2)
+				_press(&"control_next")
 				Input.action_press("move_forward")
 				phase = "scout"
 		"scout":
 			if player.controlled != scout:
-				print("FAIL key 2 didn't take control of %s" % scout.name)
+				print("FAIL right arrow didn't take control of %s" % scout.name)
 				return true
 			if scout.get_parent() != player:
 				print("FAIL %s was dropped off instead of becoming the group" % scout.name)
@@ -43,14 +43,14 @@ func _physics_process(delta: float) -> bool:
 			if player.get_animals() == [scout]:
 				left_at = t
 				Input.action_release("move_forward")
-				_press_key(KEY_1)
+				_press(&"control_group")
 				phase = "regroup"
 			elif t > 10.0:
 				print("FAIL %s never split from the group" % scout.name)
 				return true
 		"regroup":
 			if player.controlled != null:
-				print("FAIL key 1 didn't go back to the group")
+				print("FAIL Q didn't go back to the group")
 				return true
 			for old in old_members:
 				if old.get_parent() == player or old.move_direction != Vector3.ZERO:
@@ -74,8 +74,8 @@ func _physics_process(delta: float) -> bool:
 	return false
 
 
-func _press_key(keycode: Key) -> void:
-	var event := InputEventKey.new()
-	event.physical_keycode = keycode
+func _press(action: StringName) -> void:
+	var event := InputEventAction.new()
+	event.action = action
 	event.pressed = true
 	Input.parse_input_event(event)

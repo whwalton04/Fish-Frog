@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://jwj4qengayw3" path="res://crab/crab2.tscn" id="1_crab"]
+[ext_resource type="Script" path="res://crab/stilt_crab.gd" id="2_stilt"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shell"]
+albedo_color = Color(0.2, 0.42, 0.78, 1)
+roughness = 0.55
+
+[sub_resource type="SphereMesh" id="SphereMesh_shell"]
+material = SubResource("StandardMaterial3D_shell")
+radius = 0.167
+height = 0.087
+radial_segments = 32
+rings = 12
+
+[node name="StiltCrab" instance=ExtResource("1_crab")]
+script = ExtResource("2_stilt")
+
+[node name="Carapace" parent="." index="1"]
+mesh = SubResource("SphereMesh_shell")

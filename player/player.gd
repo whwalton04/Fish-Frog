@@ -11,8 +11,11 @@ extends Node3D
 ## the group's centre, so they crowd together as they go. A lone animal is its
 ## own centre, so it walks straight, exactly as the input says.
 ##
-## Keys 2-9 take one animal (in child order) to steer on its own while the rest
-## wait; 1 goes back to the group. The group is whoever is near each other: an
+## The right and left arrows take the next or previous animal to steer on its
+## own while the rest wait; Q goes back to the group. The animals cycle in
+## child order, with each stack together from the bottom up, so in a stack
+## right goes up it and left down it, and going past its top or bottom moves
+## on to the animals outside it. The group is whoever is near each other: an
 ## animal left far from the others is dropped off beside the player, and an
 ## animal in the `animals` group that comes near a member joins. Walking the
 ## controlled animal away from the others makes it the group instead: the
@@ -24,6 +27,12 @@ extends Node3D
 ## a stack walks as one. One mounted with nothing to mount looked at marks the
 ## spot on the floor it's looking at instead, at least min_jump_radius away,
 ## and space jumps it down there.
+##
+## The ability action (shift) uses the controlled animal's ability, if
+## it has one (see SpecialCrab).
+##
+## The rally action (U) takes the group apart from any stacks and drops its
+## animals one by one, rally_interval apart, above the active Flag.
 
 const ANIMAL_GROUP := &"animals"
 
@@ -46,6 +55,21 @@ const ANIMAL_GROUP := &"animals"
 @export var max_jump_radius := 2.0
 ## What the floor a jump lands on is made of.
 @export_flags_3d_physics var floor_mask := 1
+## Seconds between animals dropping onto the flag in a rally.
+@export var rally_interval := 0.25
+## How far above the top of the flag they drop from, and how far apart round
+## its pole (m).
+@export var rally_drop_height := 0.2
+@export var rally_spread := 0.3
+
+## Whether the player steers the animals. While off (another animal has
+## control) they stand still and the input is left alone; turning it
+## back on puts the view back on them.
+var active := true:
+	set(value):
+		active = value
+		if active and has_node("CameraRig"):
+			$CameraRig.make_current()
 
 ## The animal steered on its own, or null when steering the group. It may have
 ## wandered out of the group and still be steered.
@@ -57,6 +81,11 @@ var jump_target := Vector3.ZERO
 var has_jump_target := false
 
 var _arrow: MeshInstance3D
+# Animals still to drop in a rally, the flag, and seconds to the next drop.
+var _rally_queue: Array[Node3D] = []
+var _rally_flag: Flag
+var _rally_clock := 0.0
+var _rally_count := 0
 
 
 func _ready() -> void:
@@ -65,6 +94,13 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not active:
+		return
+	if event.is_action_pressed("ability"):
+		if controlled and controlled.has_method("use_ability"):
+			controlled.use_ability()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("mount"):
 		if looked_at:
 			controlled.mount_onto(looked_at)
@@ -73,22 +109,34 @@ func _unhandled_input(event: InputEvent) -> void:
 			has_jump_target = false
 		get_viewport().set_input_as_handled()
 		return
-	if not (event is InputEventKey and event.pressed and not event.echo):
+	if event.is_action_pressed("rally"):
+		_start_rally()
+		get_viewport().set_input_as_handled()
 		return
-	var number: int = event.physical_keycode - KEY_0
-	if number == 1:
+	if event.is_action_pressed("control_group"):
 		_control(null)
-	elif number >= 2 and number <= 9:
-		var animals := get_animals()
-		if number - 2 >= animals.size():
-			return
-		_control(animals[number - 2])
+	elif event.is_action_pressed("control_next"):
+		_cycle(1)
+	elif event.is_action_pressed("control_previous"):
+		_cycle(-1)
 	else:
 		return
 	get_viewport().set_input_as_handled()
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	# Mid-rally the group is split between here and the flag, so it isn't
+	# sorted into clusters, or steered, until everyone has arrived.
+	if not _rally_queue.is_empty():
+		_rally_step(delta)
+		for animal in get_animals():
+			animal.move_direction = Vector3.ZERO
+		return
+	if not active:
+		has_jump_target = false
+		for animal in get_animals():
+			animal.move_direction = Vector3.ZERO
+		return
 	_update_membership()
 	_update_jump_target()
 	var steered := get_steered()
@@ -127,7 +175,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
-	looked_at = _find_looked_at()
+	looked_at = _find_looked_at() if active else null
 	_arrow.visible = looked_at != null or has_jump_target
 	var bob := sin(Time.get_ticks_msec() * 0.006) * 0.015
 	if looked_at:
@@ -163,13 +211,46 @@ func _find_looked_at() -> Node3D:
 	return best
 
 
+## Takes every animal in the group out of its stack, then queues them to drop
+## onto the active flag, the first straight away.
+func _start_rally() -> void:
+	if not is_instance_valid(Flag.active) or not _rally_queue.is_empty():
+		return
+	_rally_flag = Flag.active
+	_rally_queue = get_animals()
+	_rally_clock = 0.0
+	_rally_count = 0
+	for animal in _rally_queue:
+		if animal.has_method("leave_stack"):
+			animal.leave_stack()
+
+
+func _rally_step(delta: float) -> void:
+	_rally_clock -= delta
+	while _rally_clock <= 0.0 and not _rally_queue.is_empty():
+		var animal: Node3D = _rally_queue.pop_front()
+		if not is_instance_valid(animal) or not is_instance_valid(_rally_flag):
+			continue
+		# Spiralling out round the pole, so they don't land on one another.
+		var out := Vector3.FORWARD.rotated(Vector3.UP, _rally_count * 2.4) \
+				* rally_spread * sqrt(_rally_count)
+		var at := _rally_flag.get_top() + out + Vector3.UP * rally_drop_height
+		if animal.has_method("drop_at"):
+			animal.drop_at(at)
+		else:
+			animal.global_position = at
+		_rally_count += 1
+		_rally_clock += rally_interval
+
+
 ## Where the view meets the floor, brought within min_jump_radius..
 ## max_jump_radius of the controlled animal across the ground, while it's
 ## mounted and has no animal to mount in view.
 func _update_jump_target() -> void:
 	has_jump_target = false
 	if not controlled or not is_instance_valid(controlled) or not controlled.get("mount") \
-			or not controlled.has_method("jump_to") or looked_at:
+			or not controlled.has_method("jump_to") or looked_at \
+			or (controlled.has_method("can_walk") and not controlled.can_walk()):
 		return
 	var cam := get_viewport().get_camera_3d()
 	if not cam:
@@ -240,6 +321,14 @@ func get_steered() -> Array[Node3D]:
 	return get_animals()
 
 
+## Where the camera looks: the flag while the group drops onto it in a rally,
+## otherwise the steered animals' centre.
+func get_focus() -> Vector3:
+	if not _rally_queue.is_empty() and is_instance_valid(_rally_flag):
+		return _rally_flag.global_position
+	return get_center()
+
+
 ## Average position of the steered animals.
 func get_center() -> Vector3:
 	var animals := get_steered()
@@ -249,6 +338,34 @@ func get_center() -> Vector3:
 	for animal in animals:
 		sum += animal.global_position
 	return sum / animals.size()
+
+
+## Takes the animal `step` along from the controlled one in get_cycle(),
+## wrapping round; from the group, the first or the last.
+func _cycle(step: int) -> void:
+	var order := get_cycle()
+	if order.is_empty():
+		return
+	var at := order.find(controlled)
+	if at < 0:
+		at = -1 if step > 0 else order.size()
+	_control(order[posmod(at + step, order.size())])
+
+
+## The group's animals in the order the arrows go through them: child order,
+## except each stack comes together, bottom to top, where its lowest member
+## would.
+func get_cycle() -> Array[Node3D]:
+	var animals := get_animals()
+	var order: Array[Node3D] = []
+	for animal in animals:
+		if animal in order:
+			continue
+		var stack: Array = animal.get_stacked() if animal.has_method("get_stacked") else [animal]
+		for member in stack:
+			if member in animals and member not in order:
+				order.append(member)
+	return order
 
 
 func _control(animal: Node3D) -> void:

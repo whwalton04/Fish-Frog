@@ -6,6 +6,8 @@
 [ext_resource type="Script" uid="uid://doquacmblwahg" path="res://world/water.gd" id="4_water"]
 [ext_resource type="Shader" uid="uid://b1vxab0vd8gvg" path="res://world/sky.gdshader" id="5_sky"]
 [ext_resource type="Script" uid="uid://c3ktjneblc2oi" path="res://world/footprints.gd" id="6_footprints"]
+[ext_resource type="PackedScene" path="res://world/flag.tscn" id="7_flag"]
+[ext_resource type="PackedScene" path="res://crab/stilt_crab.tscn" id="8_stilt_crab"]
 [ext_resource type="Texture2D" uid="uid://bxt80b27qacjr" path="res://world/textures/dirt_albedo.png" id="tex_dirt_albedo"]
 [ext_resource type="Texture2D" uid="uid://crv1irwaf40hr" path="res://world/textures/dirt_normal.png" id="tex_dirt_normal"]
 [ext_resource type="Texture2D" uid="uid://bkn6k63p8lprd" path="res://world/textures/grass_albedo.png" id="tex_grass_albedo"]
@@ -187,8 +189,19 @@ transform = Transform3D(0.62581784, 0.7799693, 0, -0.7799693, 0.62581784, 0, 0, 
 [node name="Crab1" parent="Player" unique_id=1988744409 instance=ExtResource("1_crab")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1586971, 1.2203074, 0)
 
-[node name="Crab2" parent="Player" instance=ExtResource("1_crab")]
+[node name="Crab2" parent="Player" unique_id=1791010595 instance=ExtResource("1_crab")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1586971, 1.2203074, 0.5)
 
-[node name="Crab3" parent="Player" instance=ExtResource("1_crab")]
+[node name="Crab3" parent="Player" unique_id=1540430772 instance=ExtResource("1_crab")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1586971, 1.2203074, -0.5)
+
+[node name="StiltCrab" parent="Player" unique_id=95665944 instance=ExtResource("8_stilt_crab")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1586971, 1.2203074, 1)
+stilt_length = 3.0
+stilt_time = 1.0
+
+[node name="Flag1" parent="." unique_id=190979064 instance=ExtResource("7_flag")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.823143, 0.69705915, 16.687607)
+
+[node name="Flag2" parent="." unique_id=854881655 instance=ExtResource("7_flag")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.892, 3)

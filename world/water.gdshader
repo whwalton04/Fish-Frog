@@ -21,10 +21,12 @@ uniform float foam_width = 0.8;
 uniform float foam_breakup = 0.6;
 // Size of the foam's blotches (m).
 uniform float foam_scale = 1.5;
-// The terrain's height straight down from each point, baked by water.gd, over
-// shore_rect (xy its -X -Z corner, zw its size, m). Outside it the sea is deep.
-uniform sampler2D shore_heights : filter_linear, repeat_disable;
+// Distance across the surface to the waterline (m, negative on land), baked by
+// water.gd over shore_rect (xy its -X -Z corner, zw its size, m): r with the
+// sea at its lowest, g at its highest. Outside it the sea is open.
+uniform sampler2D shore_distance : filter_linear, repeat_disable;
 uniform vec4 shore_rect = vec4(0.0);
+uniform float rest_height = 0.0;
 
 varying vec3 wave_normal;
 
@@ -44,12 +46,13 @@ float fbm(vec2 p) {
 	return 0.5 * value_noise(p) + 0.3 * value_noise(p * 2.03 + 17.0) + 0.2 * value_noise(p * 4.01 + 31.0);
 }
 
-float ground_height(vec2 xz) {
+float shore_reach(vec2 xz, float level) {
 	vec2 uv = (xz - shore_rect.xy) / max(shore_rect.zw, vec2(0.001));
 	if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
-		return -1e4;
+		return 1e4;
 	}
-	return textureLod(shore_heights, uv, 0.0).r;
+	vec2 reach = textureLod(shore_distance, uv, 0.0).rg;
+	return mix(reach.r, reach.g, level);
 }
 
 void vertex() {
@@ -84,20 +87,12 @@ void fragment() {
 	float grazing = pow(1.0 - clamp(dot(normal, VIEW), 0.0, 1.0), horizon_falloff);
 	water.rgb = mix(water.rgb, horizon_color.rgb, grazing);
 	// Foam in a band on the water around the shore, foam_width out from the
-	// waterline, with a ragged outer edge that drifts. It's measured from the
-	// baked heights straight down rather than the depth buffer, so it sits
-	// still whatever angle it's seen from. Water depth over slope (rise over
-	// run, across 1 m) is how far out from the waterline a point is; the
-	// floor stops flat sea bed spreading foam out to sea, and the cap stops
-	// the drop off the edge of the baked heights reading as a shore.
-	float below = surface.y - ground_height(surface.xz);
-	vec2 step_x = vec2(0.5, 0.0);
-	vec2 step_z = vec2(0.0, 0.5);
-	vec2 gradient = vec2(
-			ground_height(surface.xz + step_x) - ground_height(surface.xz - step_x),
-			ground_height(surface.xz + step_z) - ground_height(surface.xz - step_z));
-	float slope = clamp(length(gradient), 0.1, 4.0);
-	float reach = below / slope;
+	// waterline, with a ragged outer edge that drifts. The distance to the
+	// waterline is baked from the terrain, so it sits still whatever angle
+	// it's seen from and holds on cliffs and flats alike; it's blended
+	// between low and high water by how high the wave stands here.
+	float level = amplitude > 0.0 ? clamp((surface.y - rest_height) / amplitude * 0.5 + 0.5, 0.0, 1.0) : 0.5;
+	float reach = shore_reach(surface.xz, level);
 	float shore = 1.0 - clamp(reach / foam_width, 0.0, 1.0);
 	vec2 drift = direction * wave_time * 0.15;
 	float blotch = fbm(surface.xz / foam_scale + drift) - 0.5;

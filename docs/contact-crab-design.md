@@ -125,6 +125,16 @@ its feet on the marked spot; its riders come with it. Its feet go limp in the
 air and plant on landing like anywhere else. The stack tipping past about 70°
 also lets go. Space with another crab in view still mounts that one directly.
 
+A `Flag` (`world/flag.tscn`) turns orange when a crab comes within its reach,
+and becomes the one active flag; the previous one goes back to white. The
+rally action (U) calls `leave_stack()` on every crab in the group, freeing the
+mount joints at once rather than at the end of the frame, then drops them one
+by one, a quarter of a second apart, above the active flag, spiralling out
+round the pole. `drop_at()` resets the crab's legs, climbing and righting state before
+it falls, so it lands like a fresh crab. The group isn't steered or sorted
+into clusters until the last one has dropped. `tests/flag_test.gd` checks the
+activation and the rally out of a stack.
+
 ### Glue
 
 A mounted crab's feet are pinned to their markers and don't step. Their pull
@@ -181,6 +191,23 @@ the crab settles back down.
 
 A planted foot lets go when the hip moves out of reach of it. That covers
 ledges and falling without any "above the hip" rule.
+
+## Special crabs
+
+`SpecialCrab` (`crab/special_crab.gd`) extends `ContactCrab` with an ability,
+`use_ability()`, which Player calls on the controlled crab for the ability
+action (shift). Each kind extends it in its own script and scene, the
+scene inheriting `crab2.tscn`. Two hooks on `ContactCrab` serve them:
+`can_walk()`, false holds the crab still (no walking, no turning), and
+`leg_extension`, how many times their length the lower legs (carpus, propodus,
+dactyl) are, raising the ride height by `EXTENSION_RISE` of what they add.
+
+- `StiltCrab` (blue shell): the ability stretches its lower legs to 3× over a
+  second, lifting the body about 0.43 m, and folds them back. It can't walk,
+  turn, mount or jump until they're folded. Stretched, the lower legs are
+  posed straight from the knee to the foot, the knee out to the side, or the long carpus would fold the
+  knee up over the hip. Mounted, the mount joint's limits rise with the ride
+  height, so it stands up on the crab underneath. `tests/stilt_test.gd`.
 
 ## Lessons from implementing it
 
