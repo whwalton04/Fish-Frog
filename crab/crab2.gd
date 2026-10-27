@@ -32,7 +32,6 @@ extends RigidBody3D
 @export var can_self_right := true
 
 @export_group("Look")
-@export var leg_color := Color(0.88, 0.42, 0.24)
 ## What the feet can stand on, other crabs included.
 @export_flags_3d_physics var foot_mask := 3
 
@@ -197,9 +196,8 @@ func _ready() -> void:
 	_segment_lengths = SEGMENT_LENGTHS * _size
 	_apply_size()
 
-	var leg_mat := StandardMaterial3D.new()
-	leg_mat.albedo_color = leg_color
-	leg_mat.roughness = 0.6
+	# Legs share the shell's material, so they always match its colour.
+	var leg_mat := ($Carapace as MeshInstance3D).mesh.surface_get_material(0)
 
 	var segment_meshes: Array[CylinderMesh] = []
 	for radii in SEGMENT_RADII:

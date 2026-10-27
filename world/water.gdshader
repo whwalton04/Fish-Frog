@@ -10,7 +10,7 @@ uniform vec4 horizon_color : source_color = vec4(0.66, 0.7, 0.6, 1.0);
 uniform float horizon_falloff = 6.0;
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest;
 uniform float amplitude = 0.3;
-uniform float period = 4.0;
+uniform float period = 6.0;
 uniform float wavelength = 0.0;
 uniform vec2 direction = vec2(1.0, 0.0);
 uniform float wave_time = 0.0;

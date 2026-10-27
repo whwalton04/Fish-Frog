@@ -12,7 +12,7 @@ extends Node3D
 ## How far the surface rises and falls either side of rest (m).
 @export_range(0.0, 5.0, 0.01, "or_greater") var amplitude := 0.3
 ## Seconds for one rise and fall.
-@export_range(0.1, 30.0, 0.1, "or_greater") var period := 4.0
+@export_range(0.1, 30.0, 0.1, "or_greater") var period := 6.0
 ## Distance between wave crests (m). 0 makes the whole sea rise and fall
 ## together; otherwise the waves roll across it.
 @export_range(0.0, 200.0, 0.5, "or_greater") var wavelength := 0.0
