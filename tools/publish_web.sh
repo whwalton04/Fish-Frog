@@ -18,5 +18,5 @@ cd "$OUT"
 git init -q -b gh-pages
 git add -A
 git commit -q -m "Web build $(date -u +%F)"
-git push -f "$REMOTE" gh-pages
+git -c credential.helper= -c credential.helper='!gh auth git-credential' push -f "$REMOTE" gh-pages
 rm -rf .git
