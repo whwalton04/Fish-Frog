@@ -20,13 +20,17 @@
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("5_sky")
-shader_parameter/top_color = Color(0.057, 0.219, 0.502, 1)
-shader_parameter/horizon_color = Color(0.306, 0.469, 0.851, 1)
-shader_parameter/below_color = Color(0.45, 0.6, 0.75, 1)
+shader_parameter/top_color = Color(0.03, 0.13, 0.4, 1)
+shader_parameter/low_color = Color(0.2, 0.4, 0.78, 1)
 shader_parameter/gradient_curve = 0.6
+shader_parameter/horizon_color = Color(0.9, 0.94, 0.98, 1)
+shader_parameter/haze_height = 0.07
+shader_parameter/below_color = Color(0.6, 0.72, 0.85, 1)
 shader_parameter/sun_color = Color(1, 0.95, 0.85, 1)
-shader_parameter/sun_size = 2.5
-shader_parameter/sun_glow = 0.3
+shader_parameter/sun_size = 2.0
+shader_parameter/sun_brightness = 12.0
+shader_parameter/sun_glow = 0.6
+shader_parameter/sun_glow_size = 6.0
 
 [sub_resource type="Sky" id="Sky_sky"]
 sky_material = SubResource("ShaderMaterial_sky")
