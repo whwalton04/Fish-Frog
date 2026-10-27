@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://cyvkjvxhfv7rv" path="res://world/textures/sand_albedo.png" id="3_sand"]
 [ext_resource type="Script" uid="uid://doquacmblwahg" path="res://world/water.gd" id="4_water"]
 [ext_resource type="Shader" uid="uid://b1vxab0vd8gvg" path="res://world/sky.gdshader" id="5_sky"]
-[ext_resource type="Script" path="res://world/footprints.gd" id="6_footprints"]
+[ext_resource type="Script" uid="uid://c3ktjneblc2oi" path="res://world/footprints.gd" id="6_footprints"]
 [ext_resource type="Texture2D" uid="uid://bxt80b27qacjr" path="res://world/textures/dirt_albedo.png" id="tex_dirt_albedo"]
 [ext_resource type="Texture2D" uid="uid://crv1irwaf40hr" path="res://world/textures/dirt_normal.png" id="tex_dirt_normal"]
 [ext_resource type="Texture2D" uid="uid://bkn6k63p8lprd" path="res://world/textures/grass_albedo.png" id="tex_grass_albedo"]
@@ -176,7 +176,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 script = ExtResource("4_water")
 terrain = NodePath("../Terrain3D")
 
-[node name="Footprints" type="Node3D" parent="." node_paths=PackedStringArray("terrain", "sun")]
+[node name="Footprints" type="Node3D" parent="." unique_id=672587693 node_paths=PackedStringArray("terrain", "sun")]
 script = ExtResource("6_footprints")
 terrain = NodePath("../Terrain3D")
 sun = NodePath("../Sun")
