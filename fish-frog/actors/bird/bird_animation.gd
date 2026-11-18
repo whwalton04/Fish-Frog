@@ -22,7 +22,6 @@ var _rest_global: Array[Transform3D] = []
 var _ground_blend := 1.0
 var _phase := 0.0
 var _flap_elapsed := INF
-var _flap_start_angles: Array[float] = [0.0, 0.0, 0.0]
 var _was_grounded := false
 var _initialized := false
 var _wing_meshes: Array[MeshInstance3D] = []
@@ -39,7 +38,6 @@ func _ready() -> void:
 		set_physics_process(false)
 		return
 	skeleton.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS
-	bird.connect("flapped", _start_flap)
 	for index in range(skeleton.get_bone_count()):
 		_rest_global.append(skeleton.get_bone_global_rest(index))
 	for mesh in find_children("*", "MeshInstance3D", true, false):
@@ -190,6 +188,9 @@ func _physics_process(delta: float) -> void:
 	var grounded := bool(bird.get("is_grounded"))
 	if grounded:
 		_flap_elapsed = INF
+	elif bird.get("is_hovering"):
+		var elapsed := 0.0 if is_inf(_flap_elapsed) else _flap_elapsed
+		_flap_elapsed = fmod(elapsed + delta, 1.0 / flap_frequency)
 	elif _flap_elapsed < 1.0 / flap_frequency:
 		_flap_elapsed += delta
 	_ground_blend = move_toward(_ground_blend, 1.0 if grounded else 0.0, delta / transition_time)
@@ -270,23 +271,13 @@ func _delta_rotation(index: int, axis: Vector3, angle: float) -> Quaternion:
 	return skeleton.get_bone_rest(index).basis.get_rotation_quaternion() * Quaternion(local_axis.normalized(), angle)
 
 
-func _start_flap() -> void:
-	# A quick second press starts another stroke from the current wing angles.
-	var start_angles: Array[float] = []
-	for part in range(3):
-		start_angles.append(_flap_angle(part))
-	_flap_start_angles = start_angles
-	_flap_elapsed = 0.0
-
-
 func _flap_angle(part: int) -> float:
 	var duration := 1.0 / flap_frequency
 	if _flap_elapsed >= duration:
 		return 0.0
 	var phase := clampf(_flap_elapsed / duration, 0.0, 1.0)
 	var amplitude := flap_amplitude * (1.0 if part == 0 else .4)
-	var stroke := sin(phase * TAU - part * .35) * sin(phase * PI) * amplitude
-	return lerpf(_flap_start_angles[part], stroke, smoothstep(0.0, .12, phase))
+	return sin(phase * TAU - part * .35) * sin(phase * PI) * amplitude
 
 
 func apply_poses() -> void:

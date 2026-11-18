@@ -35,6 +35,7 @@ func run_checks() -> void:
 	animator.skeleton.get_node("SoleAlignment").modification_processed.connect(capture_feet.bind(animator))
 	var grabber = bird.get_node("Grabber")
 	check(grabber.find_grab_target() == box, "The box must be immediately reachable in front of the spawn")
+	check(not grabber.try_grab(), "Grounded bird must reject pickup")
 	var meshes := box.find_children("*", "MeshInstance3D", true, false)
 	check(meshes.size() == 1 and meshes[0].mesh is BoxMesh and meshes[0].material_override == null,
 		"The pickup must be a plain default cube")
@@ -47,6 +48,7 @@ func run_checks() -> void:
 	for prop in [box]:
 		check(prop.is_in_group("grabbable") and prop.mass <= grabber.maximum_mass, "Pickup must be eligible for grabbing: " + prop.name)
 		check(prop.global_position.y > .05 and prop.linear_velocity.length() < .1, "Pickup must settle onto the terrain: " + prop.name)
+		bird._perform_flap(Vector3.ZERO)
 		bird.freeze = true
 		bird.linear_velocity = Vector3.ZERO
 		bird.get_node("Visuals").basis = Basis.IDENTITY
@@ -60,7 +62,7 @@ func run_checks() -> void:
 		block_shape.shape = shape
 		blocker.add_child(block_shape)
 		scene.add_child(blocker)
-		blocker.global_position = bird.global_position + Vector3(0, -.6, -.35)
+		blocker.global_position = bird.global_position + Vector3(0, -.77, -.35)
 		for frame in range(3):
 			await physics_frame
 		check(grabber.find_grab_target() == prop, "Low blocker must leave the original pickup visible")

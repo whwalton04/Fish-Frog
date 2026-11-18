@@ -135,18 +135,18 @@ func run_checks() -> void:
 		bird.position.y += 6.5 / 60.0
 		await physics_frame
 	check(first.angle_to(observed_rotations[wing]) < .001, "Airborne wings must stay in a glide pose without a Space press")
-	bird._perform_flap(Vector3.ZERO)
-	for frame in range(10):
-		await physics_frame
-	check(first.angle_to(observed_rotations[wing]) > .05, "A Space-triggered flap must animate the wings")
+	bird.powered_flight = true
+	for cycle in 3:
+		var excursion := 0.0
+		for frame in range(ceili(60.0 / animation.flap_frequency)):
+			await physics_frame
+			excursion = maxf(excursion, first.angle_to(observed_rotations[wing]))
+		check(excursion > .05, "Hover keeps wings beating each cycle without input")
 	save_pose("flight", skeleton)
-	for frame in range(ceil(60.0 / animation.flap_frequency) + 10):
+	bird.powered_flight = false
+	for frame in range(ceili(60.0 / animation.flap_frequency) + 2):
 		await physics_frame
-	var rested: Quaternion = observed_rotations[wing]
-	check(first.angle_to(rested) < .001, "One flap must return to the glide pose after its cycle")
-	for frame in range(10):
-		await physics_frame
-	check(rested.angle_to(observed_rotations[wing]) < .001, "Flapping must not loop without another Space press")
+	check(first.angle_to(observed_rotations[wing]) < .001, "Wings settle into glide after hover")
 	for side in ["L", "R"]:
 		var hip: Vector3 = observed[skeleton.find_bone("leg_upper." + side)].origin
 		var expected_hip := skeleton.get_bone_rest(skeleton.find_bone("leg_upper." + side)).origin

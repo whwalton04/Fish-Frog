@@ -1,0 +1,20 @@
+[gd_resource type="Shader" format=3 uid="uid://dtq8vkrpvuqfj"]
+
+[resource]
+code = "shader_type spatial;
+
+uniform float grid_size = 1.0;
+uniform vec4 Color_1 : source_color = vec4(0.6, 0.6, 0.6, 1.0);
+uniform vec4 Color_2 : source_color = vec4(0.7, 0.7, 0.7, 1.0);
+varying vec3 local_position;
+
+void vertex() {
+    local_position = VERTEX;
+}
+
+void fragment() {
+    vec3 cell = floor(local_position / max(grid_size, 0.001));
+    float checker = mod(cell.x + cell.y + cell.z, 2.0);
+    ALBEDO = mix(Color_1.rgb, Color_2.rgb, checker);
+}
+"

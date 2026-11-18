@@ -2,15 +2,14 @@ extends RigidBody3D
 
 signal flapped
 
-@export var flap_boost: float = 5.0
-@export var forward_acceleration: float = 8.0
-@export var braking_deceleration: float = 3.0
-@export_range(0.0, 2.0, 0.01) var glide_drag: float = 0.08
+@export_group("Flight")
+@export var hover_speed := 3.0
+@export var boost_speed := 16.0
+@export var flight_acceleration := 18.0
 @export var maximum_pitch: float = deg_to_rad(60)
 @export var maximum_roll: float = deg_to_rad(45)
 @export var maximum_turn_rate: float = deg_to_rad(120)
 @export var maximum_pitch_rate: float = deg_to_rad(45)
-@export var max_velocity: float = 200
 
 @export_group("Walking")
 @export_range(0.1, 20.0, 0.1) var walk_speed: float = 5.0
@@ -32,7 +31,6 @@ signal flapped
 @export_group("Response Times")
 @export_range(0.01, 2.0, 0.01) var aim_response_time: float = 0.10
 @export_range(0.01, 2.0, 0.01) var bank_response_time: float = 0.20
-@export_range(0.01, 2.0, 0.01) var travel_response_time: float = 0.35
 @export_range(0.01, 2.0, 0.01) var camera_response_time: float = 0.45
 
 @export_group("Camera Follow")
@@ -57,6 +55,11 @@ var aim_pitch: float = 0.0
 var cursor_offset := Vector2.ZERO
 var cursor_bias := Vector2.ZERO
 var cursor_debug_label := Label.new()
+var powered_flight := false
+var is_hovering: bool:
+	get:
+		return powered_flight and not is_grounded and not (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_action_pressed("boost"))
+var _walking_gravity_scale: float
 var is_grounded := false
 var ground_normal := Vector3.UP
 var ground_velocity := Vector3.ZERO
@@ -70,6 +73,7 @@ var _ground_camera_blend := 0.0
 
 
 func _ready() -> void:
+	_walking_gravity_scale = gravity_scale
 	_camera_home_offset = camera_pivot.position
 	_camera_world_position = camera_pivot.global_position
 	# Floor detection uses actual support contacts, not proximity to a wall.
@@ -94,6 +98,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			get_viewport().set_input_as_handled()
 		return
 
 	if event is InputEventMouseMotion:
@@ -151,24 +158,6 @@ func _update_steering(delta: float, controls_active: bool = true) -> void:
 	pitch = clampf(pitch - cursor_bias.y * maximum_pitch_rate * delta, -maximum_pitch, maximum_pitch)
 
 
-func _steer_velocity(motion: Vector3, forward: Vector3, delta: float) -> Vector3:
-	var speed := motion.length()
-	if speed < 0.001:
-		return motion
-	var direction := motion / speed
-	var axis := direction.cross(forward)
-	var angle := direction.angle_to(forward)
-	if angle < 0.00001:
-		return motion
-	# An opposite direction has no cross-product axis; choose a stable one.
-	if axis.length_squared() < 0.000001:
-		axis = direction.cross(Vector3.UP)
-		if axis.length_squared() < 0.000001:
-			axis = direction.cross(Vector3.RIGHT)
-	return direction.rotated(axis.normalized(), angle *
-		_response_weight(delta, travel_response_time)) * speed
-
-
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var controls_active := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	takeoff_cooldown = maxf(0.0, takeoff_cooldown - state.step)
@@ -182,8 +171,13 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.linear_velocity = _update_walk_velocity(state.linear_velocity, movement, state.step, controls_active)
 	else:
 		_update_steering(state.step, controls_active)
-		state.linear_velocity = _update_flight_velocity(state.linear_velocity, state.step,
-			controls_active, Input.is_action_pressed("boost"))
+		if powered_flight:
+			var movement := Vector3.ZERO
+			if controls_active:
+				var planar := Input.get_vector("walk_left", "walk_right", "walk_forward", "walk_backward")
+				movement = Vector3(planar.x, Input.get_axis("descend", "Flap"), planar.y)
+			state.linear_velocity = _update_flight_velocity(state.linear_velocity, movement, state.step,
+				controls_active and Input.is_action_pressed("boost"))
 
 
 func _update_ground_contact(state: PhysicsDirectBodyState3D) -> void:
@@ -217,6 +211,8 @@ func _set_grounded(value: bool) -> void:
 	pitch = 0.0
 	roll = 0.0
 	if is_grounded:
+		powered_flight = false
+		gravity_scale = _walking_gravity_scale
 		ground_camera_yaw = camera_pivot.rotation.y
 		ground_camera_pitch = clampf(camera_pivot.rotation.x,
 			-maximum_ground_look_pitch, maximum_ground_look_pitch)
@@ -234,8 +230,8 @@ func _perform_flap(motion: Vector3) -> Vector3:
 		_set_grounded(false)
 		takeoff_cooldown = 0.2
 		motion.y = maxf(motion.y, 0.0) + takeoff_speed
-	else:
-		motion.y += flap_boost
+	powered_flight = true
+	gravity_scale = 0.0
 	flapped.emit()
 	return motion
 
@@ -260,25 +256,12 @@ func _update_walk_velocity(motion: Vector3, movement: Vector2, delta: float, con
 	return tangent + ground_normal * relative.dot(ground_normal) + ground_velocity
 
 
-func _update_flight_velocity(motion: Vector3, delta: float, controls_active: bool, accelerating: bool) -> Vector3:
-	if controls_active:
+func _update_flight_velocity(motion: Vector3, movement: Vector3, delta: float, boosting: bool) -> Vector3:
+	var target := Basis(Vector3.UP, yaw) * movement.limit_length(1.0) * hover_speed
+	if boosting:
 		var forward := -Basis.from_euler(Vector3(pitch, yaw, 0.0)).z
-		if accelerating:
-			motion += forward * forward_acceleration * delta
-		# Redirect existing momentum even when the accelerate button is released.
-		motion = _steer_velocity(motion, forward, delta)
-		if not accelerating:
-			# Glide with gentle drag instead of actively braking to a stop.
-			var retention := exp(-glide_drag * delta)
-			motion.x *= retention
-			motion.z *= retention
-	else:
-		# Releasing mouse control still brakes horizontal motion.
-		var horizontal := Vector3(motion.x, 0.0, motion.z)
-		horizontal = horizontal.move_toward(Vector3.ZERO, braking_deceleration * delta)
-		motion.x = horizontal.x
-		motion.z = horizontal.z
-	return motion.limit_length(max_velocity)
+		target = (target + forward * boost_speed).limit_length(boost_speed)
+	return motion.move_toward(target, flight_acceleration * delta)
 
 
 func _limited_camera_angle(current: float, target: float, delta: float, limit: float, response_time: float = -1.0) -> float:
@@ -331,8 +314,15 @@ func _update_camera_position(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	cursor_debug_label.visible = show_cursor_debug
-	cursor_debug_label.text = "Walking | WASD: move | Mouse: look | Space: take off" if is_grounded else \
-		"Flying | Cursor bias: (%.2f, %.2f) | strength: %.2f" % [cursor_bias.x, cursor_bias.y, cursor_bias.length()]
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		cursor_debug_label.text = "Click to control the bird"
+	elif is_grounded:
+		cursor_debug_label.text = "Walking | WASD: move | Mouse: look | Space: take off"
+	elif powered_flight:
+		var mode := "Hover" if is_hovering else "Boost"
+		cursor_debug_label.text = mode + " | WASD: move | Space/Ctrl: up/down | Shift: boost"
+	else:
+		cursor_debug_label.text = "Airborne | Space: hover"
 	# Aim and bank are local offsets, independent of the accumulated heading.
 	visuals.basis = Basis.from_euler(Vector3(pitch, yaw, 0.0)) * Basis.from_euler(Vector3(aim_pitch, aim_yaw, roll))
 	_update_camera(delta)

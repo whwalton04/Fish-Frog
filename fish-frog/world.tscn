@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://byot3al76wyuk"]
+
+[ext_resource type="PackedScene" uid="uid://ga4brol6kes6" path="res://maps/world.tscn" id="1_f3sb7"]
+
+[node name="World" unique_id=367260359 instance=ExtResource("1_f3sb7")]
+
+[node name="bird" parent="." index="0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+
+[node name="RigidBody3D" parent="." index="2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.85, 1.38, -1.1)

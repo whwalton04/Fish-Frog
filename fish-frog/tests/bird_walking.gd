@@ -131,6 +131,7 @@ func _run() -> void:
 	var launch: Vector3 = bird._perform_flap(Vector3(2, -4, 3))
 	check(not bird.is_grounded and launch.y >= bird.takeoff_speed and launch.x == 2 and launch.z == 3, "Space must launch from the ground while preserving horizontal momentum")
 	check(bird.takeoff_cooldown > 0, "Takeoff must temporarily ignore lingering floor contacts")
+	bird._set_grounded(true)
 	# Actual Jolt contact classification and flight/walk transitions.
 	var floor := make_box(Vector3(0, -0.5, 0), Vector3(12, 1, 12))
 	bird.freeze = false
@@ -147,7 +148,14 @@ func _run() -> void:
 	check(not bird.is_grounded and bird.position.y > launch_height + 0.1, "Takeoff must actually leave the floor without immediately relanding")
 	for frame in range(160):
 		await physics_frame
-	check(bird.is_grounded, "A launched bird must return to walking after landing")
+	var hover_height: float = bird.position.y
+	for frame in range(60):
+		await physics_frame
+	check(bird.is_hovering and absf(bird.position.y - hover_height) < .02, "A Space tap must hold altitude")
+	bird.linear_velocity = Vector3.DOWN * 10
+	for frame in range(60):
+		await physics_frame
+	check(bird.is_grounded and not bird.is_hovering, "Landing must restore walking")
 	bird.rotation.z = deg_to_rad(60)
 	bird.position = Vector3(0, 3, 0)
 	bird.linear_velocity = Vector3.ZERO

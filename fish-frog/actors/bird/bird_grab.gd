@@ -78,7 +78,7 @@ func find_grab_target() -> RigidBody3D:
 
 
 func try_grab() -> bool:
-	if is_instance_valid(held_body):
+	if not bird.get("is_hovering") or is_instance_valid(held_body):
 		return false
 	held_body = find_grab_target()
 	if held_body == null:
@@ -175,7 +175,7 @@ func _physics_process(_delta: float) -> void:
 		held_body = null
 	_hint.visible = show_grab_hint and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	if _hint.visible:
-		_hint.text = "E: Release" if held_body else "E: Grab" if find_grab_target() else ""
+		_hint.text = "E: Release" if held_body else "E: Grab" if bird.get("is_hovering") and find_grab_target() else ""
 
 
 func _exit_tree() -> void:

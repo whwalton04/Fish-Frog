@@ -1,0 +1,145 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://maps/pressure_plate_demo.gd" id="1"]
+[ext_resource type="PackedScene" path="res://actors/bird/bird.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://props/grabbable_box.tscn" id="3"]
+
+[sub_resource type="Environment" id="Sky"]
+background_mode = 1
+background_color = Color(0.46, 0.67, 0.73, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.9, 0.95, 1, 1)
+ambient_light_energy = 0.7
+
+[sub_resource type="StandardMaterial3D" id="FloorMaterial"]
+albedo_color = Color(0.31, 0.45, 0.42, 1)
+
+[sub_resource type="BoxMesh" id="FloorMesh"]
+material = SubResource("FloorMaterial")
+size = Vector3(16, 0.5, 20)
+
+[sub_resource type="BoxShape3D" id="FloorShape"]
+size = Vector3(16, 0.5, 20)
+
+[sub_resource type="StandardMaterial3D" id="PlateMaterial"]
+albedo_color = Color(1, 0.55, 0.09, 1)
+
+[sub_resource type="BoxMesh" id="PlateMesh"]
+material = SubResource("PlateMaterial")
+size = Vector3(2, 0.16, 2)
+
+[sub_resource type="BoxShape3D" id="PlateShape"]
+size = Vector3(2, 0.16, 2)
+
+[sub_resource type="StandardMaterial3D" id="WallMaterial"]
+albedo_color = Color(0.24, 0.35, 0.37, 1)
+
+[sub_resource type="BoxMesh" id="WallMesh"]
+material = SubResource("WallMaterial")
+size = Vector3(6.5, 4, 0.6)
+
+[sub_resource type="BoxShape3D" id="WallShape"]
+size = Vector3(6.5, 4, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="DoorMaterial"]
+albedo_color = Color(0.12, 0.42, 0.53, 1)
+
+[sub_resource type="BoxMesh" id="DoorMesh"]
+material = SubResource("DoorMaterial")
+size = Vector3(3, 3.4, 0.48)
+
+[sub_resource type="BoxShape3D" id="DoorShape"]
+size = Vector3(3, 3.4, 0.48)
+
+[sub_resource type="StandardMaterial3D" id="LintelMaterial"]
+albedo_color = Color(0.24, 0.35, 0.37, 1)
+
+[sub_resource type="BoxMesh" id="LintelMesh"]
+material = SubResource("LintelMaterial")
+size = Vector3(3.4, 0.6, 0.7)
+
+[sub_resource type="BoxShape3D" id="LintelShape"]
+size = Vector3(3.4, 0.6, 0.7)
+
+[node name="PressurePlateDemo" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Bird" parent="." instance=ExtResource("2")]
+position = Vector3(0, 1.1, 4)
+
+[node name="Block" parent="." instance=ExtResource("3")]
+position = Vector3(0, 0.34, 2.9)
+contact_monitor = true
+max_contacts_reported = 8
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-56, -28, 0)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Sky")
+
+[node name="Floor" type="StaticBody3D" parent="."]
+position = Vector3(0, -0.25, 0)
+
+[node name="Surface" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("FloorMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("FloorShape")
+
+[node name="Plate" type="StaticBody3D" parent="."]
+position = Vector3(1.5, 0.08, -1)
+
+[node name="Surface" type="MeshInstance3D" parent="Plate"]
+mesh = SubResource("PlateMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="Plate"]
+shape = SubResource("PlateShape")
+
+[node name="LeftWall" type="StaticBody3D" parent="."]
+position = Vector3(-4.75, 2, -4)
+
+[node name="Surface" type="MeshInstance3D" parent="LeftWall"]
+mesh = SubResource("WallMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="LeftWall"]
+shape = SubResource("WallShape")
+
+[node name="RightWall" type="StaticBody3D" parent="."]
+position = Vector3(4.75, 2, -4)
+
+[node name="Surface" type="MeshInstance3D" parent="RightWall"]
+mesh = SubResource("WallMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="RightWall"]
+shape = SubResource("WallShape")
+
+[node name="Door" type="AnimatableBody3D" parent="."]
+position = Vector3(0, 1.7, -4)
+
+[node name="Surface" type="MeshInstance3D" parent="Door"]
+mesh = SubResource("DoorMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="Door"]
+shape = SubResource("DoorShape")
+
+[node name="Lintel" type="StaticBody3D" parent="."]
+position = Vector3(0, 3.7, -4)
+
+[node name="Surface" type="MeshInstance3D" parent="Lintel"]
+mesh = SubResource("LintelMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="Lintel"]
+shape = SubResource("LintelShape")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Instructions" type="Label" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -72.0
+theme_override_constants/outline_size = 4
+text = "Drop the block on the amber plate to open the door.\nSpace: hover   |   WASD: move   |   E: grab / release   |   R: reset"
